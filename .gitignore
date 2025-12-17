@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter temp
+.ipynb_checkpoints/
+
+# Package build info
+hsikit.egg-info/
+dist/
+build/

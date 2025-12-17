@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hsikit"
+version = "0.1.0"
+description = "Toolkit for hyperspectral image processing"
+authors = [
+    { name = "Luka Kopač", email = "luka.kopac@bf.uni-lj.si" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "scikit-learn",
+    "scipy"
+]
+
+[project.urls]
+Homepage = "tbd"
