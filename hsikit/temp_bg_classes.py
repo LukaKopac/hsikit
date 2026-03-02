@@ -1,9 +1,11 @@
 from pathlib import Path
-from .io import batch_import_hsi
+from .io import batch_load_hsi, find_hsi_basepaths, load_sample_mapping, load_hsi_raw, load_wavelengths
 from .base_utils import convert_to_reflectance
-from .bg_removal import mask_top_contrast, mask_top_contrastV2, fixed_rect_mask_columnwise, extract_sample_cubes_from_masks
+from .binary_masks import mask_top_contrast, mask_top_contrastV2, fixed_rect_mask_columnwise
+from masking_utility import extract_sample_cubes_from_masks
 import numpy as np
 import re
+import os
 
 class HSIImporter:
     def __init__(self, root_folder, suffix="_refl", mapping_file=None):
@@ -16,7 +18,7 @@ class HSIImporter:
         self.basepaths = []
         self.scenes = {}
 
-    def batch_import(self, return_metadata=False, return_wavelengths=False, auto_mapping=True):
+    def batch_load(self, return_metadata=False, return_wavelengths=False, auto_mapping=True):
         self.basepaths = find_hsi_basepaths(self.root_folder, suffix=self.suffix)
         self.cubes = {}
         self.metadata = {}
@@ -33,7 +35,7 @@ class HSIImporter:
         # load global mapping file once
         mapping = {}
         if auto_mapping and self.mapping_file and os.path.exists(self.mapping_file):
-            mapping = import_sample_mapping(self.mapping_file)
+            mapping = load_sample_mapping(self.mapping_file)
             print(f"Loaded mapping file: {self.mapping_file} ({len(mapping)} scenes)")
         elif auto_mapping:
             print("⚠️ No mapping file found.")
@@ -48,10 +50,10 @@ class HSIImporter:
 
             # load cube (+ metadata if requested)
             if return_metadata:
-                cube, meta = import_hsi_raw(base, return_metadata=True)
+                cube, meta = load_hsi_raw(base, return_metadata=True)
                 self.metadata[scene_name] = meta
             else:
-                cube = import_hsi_raw(base, return_metadata=False)
+                cube = load_hsi_raw(base, return_metadata=False)
                 meta = {}
 
             self.cubes[scene_name] = cube
@@ -62,7 +64,7 @@ class HSIImporter:
                 "masks": [],
                 "combined_mask": None
             }
-            print(f"Imported: {basename} -> shape {cube.shape}")
+            print(f"Loaded: {basename} -> shape {cube.shape}")
 
             if scene_name in mapping:
                 print(f" → Mapping found for {scene_name} ({len(mapping[scene_name])} entries)")
@@ -71,7 +73,7 @@ class HSIImporter:
 
         # load wavelengths (only once)
         if return_wavelengths and self.basepaths:
-            self.wavelengths = import_wavelengths(self.basepaths[0] + ".hdr")
+            self.wavelengths = load_wavelengths(self.basepaths[0] + ".hdr")
             print(f"Wavelengths loaded: {len(self.wavelengths)} bands")
 
         return self
@@ -168,7 +170,7 @@ class HSIProcessor:
         self.samples_dict = {}
 
     def load(self, suffix='refl'):
-        self.cubes, self.meta, self.wl = batch_import_hsi(
+        self.cubes, self.meta, self.wl = batch_load_hsi(
             root_folder=self.folder,
             suffix=suffix,
             return_wavelengths=True,
@@ -375,7 +377,7 @@ class HSIProcessorV2:
         self.samples_dict = {}
 
     def load(self, suffix='refl'):
-        self.cubes, self.meta, self.wl, self.cube_names = batch_import_hsi(
+        self.cubes, self.meta, self.wl, self.cube_names = batch_load_hsi(
             root_folder=self.folder,
             suffix=suffix,
             return_wavelengths=True,
