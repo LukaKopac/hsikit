@@ -4,10 +4,10 @@ from pathlib import Path
 import re
 import os
 
-from .hsi_io import batch_load_hsi, find_hsi_basepaths, load_sample_mapping, load_hsi_raw, load_wavelengths
-from .base_utils import convert_to_reflectance
-from .binary_masks import mask_top_contrast, mask_top_contrastV2, fixed_rect_mask_columnwise
-from .masking_utility import extract_sample_cubes_from_masks
+from hsi_io import batch_load_hsi, find_hsi_basepaths, load_sample_mapping, load_hsi_raw, load_wavelengths
+from base_utils import convert_to_reflectance
+from binary_masks import mask_top_contrast, mask_top_contrastV2, fixed_rect_extraction
+from masking_utility import extract_sample_cubes_from_masks
 
 
 
@@ -218,7 +218,7 @@ class HSIProcessor:
         self.rect_masks = []
         self.coords = []
         for mask in self.masks:
-            rects, coords = fixed_rect_mask_columnwise(mask, width, height, min_frac=min_frac)
+            rects, coords = fixed_rect_extraction(mask, (width, height), mode='column', min_frac=min_frac)
             self.rect_masks.append(rects)
             self.coords.append(coords)
         return self
@@ -428,7 +428,7 @@ class HSIProcessorV2:
         self.rect_masks = []
         self.coords = []
         for mask in self.masks:
-            rects, coords = fixed_rect_mask_columnwise(mask, rect_width=width, rect_height=height, min_frac=min_frac)
+            rects, coords = fixed_rect_extraction(mask, (width, height), mode='column', min_frac=min_frac)
             self.rect_masks.append(rects)
             self.coords.append(coords)
         return self
