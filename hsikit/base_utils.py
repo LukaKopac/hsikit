@@ -1,61 +1,84 @@
 import numpy as np
+from numpy.typing import NDArray
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.colors import Colormap
 from sklearn.decomposition import PCA
 import plotly.graph_objects as go
 import plotly.io as pio
 pio.renderers.default = 'notebook'
 
+from typing import Optional
+
 # Basic utility, processing, scaling, normalization, PCA
 
-def convert_to_reflectance(cube):
+def convert_to_reflectance(cube: NDArray) -> NDArray:
     """
-    Divide all values in a hyperspectral cube by 10,000.
+    Divides all values in a hyperspectral cube by 10,000.
 
-    Parameters:
-        cube (np.ndarray): 3D hyperspectral data (H, W, B).
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array.
 
-    Returns:
-        scaled_cube (np.ndarray): Cube with values divided by 10,000.
+    Returns
+    -------
+    NDArray
+        Cube with values divided by 10,000.
     """
     return cube.astype(np.float32) / 10000.0
 
-def normalize_min_max(cube, return_params=False):
+def normalize_min_max(
+    cube: NDArray,
+    return_params: bool = False
+) -> NDArray | tuple[NDArray, NDArray, NDArray]:
     """
-    Min-max normalize a 3D hyperspectral cube
+    Min-max normalizes a 3D hyperspectral cube
 
-    Parameters:
-    - cube (array): 3D array, expected shape (H, W, B)
-    - return_params (bool): whether to return min and max values
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array, expected shape (H, W, B)
+    return_params : bool
+        Whether to return min and max values per band.
 
-    Returns:
-    - norm_cube (array): normalized cube
-    - min_vals (): minimum values per band (B,)
-    - max_vals (): maximum values per band (B,)
+    Returns
+    -------
+    NDArray or tuple[NDArray, NDArray, NDArray]
+        If return_params is False, returns normalized cube (H, W, B).
+        If True, returns a tuple:
+            (normalized_cube, min_vals, max_vals),
+            where min_vals and max_vals are NDArray of shape (B,)
     """
     h, w, b = cube.shape
-    X = cube.reshape(-1, b)
-    min_vals = X.min(axis=0)
-    max_vals = X.max(axis=0)
-    norm_X = (X - min_vals) / (max_vals - min_vals + 1e-8)
+    flat_cube = cube.reshape(-1, b)
+    min_vals = flat_cube.min(axis=0)
+    max_vals = flat_cube.max(axis=0)
+    norm_X = (flat_cube - min_vals) / (max_vals - min_vals + 1e-8)
     norm_cube = norm_X.reshape(h, w, b)
+
     if return_params:
         return norm_cube, min_vals, max_vals
     else:
         return norm_cube
 
-def normalize_mean_std(cube, return_params=False):
+def normalize_mean_std(cube: NDArray, return_params: bool = False) -> NDArray | tuple[NDArray, NDArray, NDArray]:
     """
-    Standardize a 3D hyperspectral cube using mean and std.
+    Standardizes a 3D hyperspectral cube using mean and std.
 
-    Parameters:
-    - cube (array): 3D array, expected shape (H, W, B)
-    - return_params (bool): whether to return mean and std values
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array, expected shape (H, W, B)
+    return_params : bool
+        Whether to return mean and std values per band.
 
-    Returns:
-    - norm_cube (array): standardized cube
-    - mean_vals (): mean values per band (B,)
-    - std_vals (): std deviation values per band (B,)
+    Returns
+    -------
+    NDArray or tuple[NDArray, NDArray, NDArray]
+        If return_params is False, returns standardized cube (H, W, B).
+        If True, returns a tuple:
+            (standardized_cube, mean_vals, std_vals),
+            where mean_vals and std_vals are NDArray of shape (B,)
     """
     h, w, b = cube.shape
     X = cube.reshape(-1, b)
@@ -68,54 +91,74 @@ def normalize_mean_std(cube, return_params=False):
     else:
         return norm_cube
 
-def apply_pca(cube, n_components=3, mask=None, return_model=False):
+def apply_pca(
+    cube: NDArray,
+    n_components: int = 3,
+    mask: Optional[NDArray] = None,
+    return_model: bool = False
+) -> NDArray | tuple[NDArray, PCA]:
     """
-    Apply PCA on a 3D hyperspectral cube.
+    Applies PCA on a 3D hyperspectral cube.
 
-    Parameters:
-    - cube (array): 3D array, expected shape (H, W, B)
-    - n_components (int): number of components used for PCA
-    - mask (array or None): optional boolean mask of shape (h, w)
-    - return_model (bool): whether to return the fitter PCA model
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array, expected shape (H, W, B).
+    n_components : int
+        Number of PCA components to retain.
+    mask : NDArray | None
+        Optional boolean mask of shape (H, W) to select pixels for PCA.
+    return_model : bool
+        Whether to return the fitted PCA object.
 
-    Returns:
-    - pca_cube (array): PCA-transformed cube of shape (H, W, n_components)
-    - pca (): trained PCA object
+    Returns
+    -------
+    NDArray or tuple[NDArray, object]
+        If return_model is False, returns PCA-transformed cube of shape (H, W, n_components)
+        If True, returns a tuple (pca_cube, pca), containing the transformed cube and fitted PCA object.
     """
     h, w, b = cube.shape
-    X = cube.reshape(-1, b)
+    flat_cube = cube.reshape(-1, b)
 
     if mask is not None:
         mask_flat = mask.flatten()
-        X_masked = X[mask_flat]
+        X_masked = flat_cube[mask_flat]
         pca = PCA(n_components=n_components)
         X_pca_masked = pca.fit_transform(X_masked)
-        X_pca = np.zeros((h * w, n_components))
-        X_pca[:] = np.nan
-        X_pca[mask_flat] = X_pca_masked
+        flat_pca = np.full((h * w, n_components), np.nan)
+        flat_pca[mask_flat] = X_pca_masked
     else:
         pca = PCA(n_components=n_components)
-        X_pca = pca.fit_transform(X)
+        flat_pca = pca.fit_transform(flat_cube)
         
-    pca_cube = X_pca.reshape(h, w, n_components)
+    pca_cube = flat_pca.reshape(h, w, n_components)
     
     if return_model:
         return pca_cube, pca
-    else:
-        return pca_cube
+    return pca_cube
 
 # Plotting and visualization
 
-def plot_band_image(cube, band_index, title=None, cmap='gray', show_grid=False):
+def plot_band_image(cube: NDArray, band_index: int, title: Optional[str] = None, cmap: str = 'gray', show_grid: bool = False) -> None:
     """
-    Plot a single band/component from a 3D hyperspectral cube.
+    Plots a single specified band image from a 3D hyperspectral cube.
 
-    Parameters:
-    - cube (np.ndarray): 3D array (H, W, B).
-    - band_index (int): Index of the band/component to display.
-    - title (str): Optional plot title.
-    - cmap (str): Matplotlib colormap (default: 'gray').
-    - show_grid (bool): If True, overlays a pixel grid for coordinate reference.
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array (H, W, B).
+    band_index : int
+        Index of the band/component to display.
+    title : str
+        Optional plot title.
+    cmap : str
+        Matplotlib colormap (default: 'gray').
+    show_grid : bool
+        If True, overlays a pixel grid for coordinate reference.
+
+    Returns
+    -------
+    None
     """
     plt.figure(figsize=(6, 6))
     ax = plt.gca()
@@ -136,15 +179,24 @@ def plot_band_image(cube, band_index, title=None, cmap='gray', show_grid=False):
     plt.tight_layout()
     plt.show()
 
-def plot_rgb_composite(cube, bands=(30, 20, 10), title=None, scale_each_band=True):
+def plot_rgb_composite(cube: NDArray, bands: tuple = (50, 150, 250), title: Optional[str] = None, scale_each_band: bool = True) -> None:
     """
-    Create and display an RGB composite from 3 bands of a hyperspectral cube.
+    Create and display an RGB composite from selected 3 bands of a hyperspectral cube.
 
-    Parameters:
-        cube (np.ndarray): 3D hyperspectral cube (H, W, B).
-        bands (tuple): (R, G, B) band indices to use.
-        title (str): Optional plot title.
-        scale_each_band (bool): Whether to scale each band individually to [0, 1].
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array (H, W, B).
+    bands : tuple
+        Band indices to use for (R, G, B).
+    title : str
+        Optional plot title.
+    scale_each_band : bool
+        Whether to scale each band individually to [0, 1].
+
+    Returns
+    -------
+    None
     """
     h, w, b = cube.shape
     r, g, b = bands
@@ -164,18 +216,40 @@ def plot_rgb_composite(cube, bands=(30, 20, 10), title=None, scale_each_band=Tru
     plt.tight_layout()
     plt.show()
 
-def plot_spectra(cube, coords=None, wavelengths=None, labels=None, average=False, window_size=1, title=None):
+def plot_spectra(
+    cube: NDArray,
+    coords: Optional[list[tuple[int, int]]] = None,
+    wavelengths: Optional[list | NDArray] = None,
+    labels: Optional[list[str]] = None,
+    average: bool = True,
+    window_size: int = 1,
+    title: Optional[str] = None
+) -> None:
     """
-    Plot spectral profiles from specific pixels, the average spectrum, or both.
+    Plot spectral profiles from specific pixels of HSI 3D array, the average spectrum, or both.
+    Default plots only the average spectrum of the whole cube.
 
-    Parameters:
-    - cube (np.ndarray): 3D hyperspectral cube (H, W, B).
-    - coords (list of (row, col)): Optional list of pixel locations.
-    - wavelengths (list or np.ndarray): Optional wavelength values (length B).
-    - labels (list of str): Optional labels for each pixel.
-    - average (bool): If True, include the average spectrum of the whole cube.
-    - window_size (int): Size of the square area around each coord to average (must be odd, default=1).
-    - title (str): Optional plot title.
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array (H, W, B).
+    coords : Optional[list[tuple[int, int]]]
+        Optional list of pixel locations (row, col).
+    wavelengths : Optional[list | NDArray]
+        Optional wavelength values (length B).
+    labels : Optional[list[str]]
+        Optional labels for each pixel.
+    average : bool
+        If True, include the average spectrum of the whole cube.
+        Default is True.
+    window_size : int
+        Size of the square area around each coord to average (must be odd, default=1).
+    title : Optional[str]
+        Optional plot title.
+
+    Returns
+    -------
+    None
     """
     h, w, b = cube.shape
     x_axis = wavelengths if wavelengths is not None else np.arange(b)
@@ -211,16 +285,32 @@ def plot_spectra(cube, coords=None, wavelengths=None, labels=None, average=False
     plt.tight_layout()
     plt.show()
 
-def plot_mean_spectrum_with_std(cube, mask=None, wavelengths=None, title=None, color='blue'):
+def plot_mean_spectrum_with_std(
+    cube: NDArray,
+    mask: Optional[NDArray] = None,
+    wavelengths: Optional[list | NDArray] = None,
+    title: Optional[str] = None,
+    color: str = 'blue'
+) -> None:
     """
     Plot the mean spectrum with ±1 standard deviation as a shaded area.
 
-    Parameters:
-    - cube (np.ndarray): 3D hyperspectral data (H, W, B).
-    - mask (np.ndarray or None): Optional binary mask (H, W) to restrict region of interest.
-    - wavelengths (list or np.ndarray): Optional list of wavelengths (length B).
-    - title (str): Plot title.
-    - color (str): Line/shading color (default: 'blue').
+    Parameters
+    ----------
+    cube : NDArray
+        3D hyperspectral data (H, W, B).
+    mask : Optional[NDArray]
+        Optional binary mask (H, W) to restrict region of interest.
+    wavelengths : Optional[list | NDArray]
+        Optional list of wavelengths (length B).
+    title : Optional[str]
+        Plot title.
+    color : str
+        Matplotlib line/shading color (default: 'blue').
+
+    Returns
+    -------
+    None
     """
     h, w, b = cube.shape
     x_axis = wavelengths if wavelengths is not None else np.arange(b)
@@ -247,17 +337,35 @@ def plot_mean_spectrum_with_std(cube, mask=None, wavelengths=None, title=None, c
     plt.tight_layout()
     plt.show()
 
-def plot_spectral_histogram(cube, band=None, mask=None, bins=100, log_scale=False, title=None):
+def plot_spectral_histogram(
+    cube: NDArray,
+    band: Optional[int] = None,
+    mask: Optional[NDArray] = None,
+    bins: int = 100,
+    log_scale: bool = False,
+    title: Optional[str] = None
+) -> None:
     """
     Plot a histogram of reflectance/intensity values from a single band or entire cube.
 
-    Parameters:
-    - cube (np.ndarray): 3D hyperspectral data (H, W, B).
-    - band (int or None): If specified, shows histogram for that band; otherwise flattens all bands.
-    - mask (np.ndarray or None): Optional binary mask (H, W) to limit pixels.
-    - bins (int): Number of histogram bins.
-    - log_scale (bool): Whether to use logarithmic y-axis.
-    - title (str): Plot title.
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array (H, W, B).
+    band : Optional[int]
+        If specified, shows histogram for that band; otherwise flattens all bands.
+    mask : Optional[NDArray]
+        Optional binary mask (H, W) to limit pixels.
+    bins : int
+        Number of histogram bins.
+    log_scale : bool
+        Whether to use logarithmic y-axis.
+    title : Optional[str]
+        Plot title.
+
+    Returns
+    -------
+    None
     """
     if mask is not None:
         data = cube[mask]
@@ -284,21 +392,39 @@ def plot_spectral_histogram(cube, band=None, mask=None, bins=100, log_scale=Fals
     plt.legend()
     plt.show()
 
-def vis_3D_slices(data_cube, spacing=10, num_slices=10, mask=None, stride=3, cmap=plt.cm.gray):
+def vis_3D_slices(
+    cube: NDArray,
+    spacing: float = 10,
+    num_slices: int = 10,
+    mask: Optional[NDArray] = None,
+    stride: int = 3,
+    cmap: str | Colormap = "gray"
+) -> None:
     """
     3D visualization of hyperspectral slices.
 
-    Parameters:
-    - data_cube: ndarray (H, W, B)
-    - spacing: distance between slices on z-axis
-    - num_slices: how many bands to visualize
-    - mask: optional binary mask (H, W)
-    - stride: meshgrid stride for rendering
-    - cmap: matplotlib colormap
-    """
-    h, w, b = data_cube.shape
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array (H, W, B).
+    spacing : float
+        Distance between slices on z-axis.
+    num_slices : int
+        Number of bands to visualize.
+    mask : Optional[NDArray]
+        Optional binary mask (H, W).
+    stride : int
+        Meshgrid stride for rendering.
+    cmap : str | Colormap
+        matplotlib colormap (default "gray").
 
-    total_bands = data_cube.shape[2]
+    Returns
+    -------
+    None
+    """
+    h, w, b = cube.shape
+
+    total_bands = cube.shape[2]
     if num_slices is None or num_slices >= b:
         slices = np.arange(b)
     else:
@@ -308,7 +434,7 @@ def vis_3D_slices(data_cube, spacing=10, num_slices=10, mask=None, stride=3, cma
     ax = fig.add_subplot(111, projection='3d')
     
     for i, band in enumerate(slices):
-        img = data_cube[:, :, band]
+        img = cube[:, :, band]
         x, y = np.meshgrid(np.arange(w), np.arange(h))
         z = np.full_like(x, (len(slices) -1 - i) * spacing)
     
@@ -341,18 +467,37 @@ def vis_3D_slices(data_cube, spacing=10, num_slices=10, mask=None, stride=3, cma
     plt.tight_layout()
     plt.show()
 
-def vis_3D_slices_interactive(data_cube, spacing=1, stride=3, num_slices=20, save=False):
+def vis_3D_slices_interactive(
+    cube: NDArray,
+    spacing: float = 1,
+    stride: int = 3,
+    num_slices: Optional[int] = 20,
+    title: Optional[str] = None,
+    save: bool = False
+) -> None:
     """
     Interactive 3D visualization of hyperspectral slices.
 
-    Parameters:
-    - data_cube (ndarray): shape (H, W, B)
-    - spacing (int/float): distance between slices on Z axis
-    - stride (int): downsample spatial resolution by this factor
-    - num_slices (int or None): number of spectral bands to visualize. If None, show all bands.
-    - save (bool): if True, save to "3D_stack.svg"
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array (H, W, B).
+    spacing : float
+        Distance between slices on Z axis.
+    stride : int
+        Downsample spatial resolution by this factor.
+    num_slices : Optional[int]
+        Number of spectral bands to visualize. If None, show all bands.
+    title : Optional[str]
+        Optional plot title and file name if saved (if None: 'HSI 3D stack').
+    save : bool
+        if True, save as title or 'HSI_3D_stack.svg' if title is None
+
+    Returns
+    -------
+    None
     """
-    downsampled = data_cube[::stride, ::stride, :]
+    downsampled = cube[::stride, ::stride, :]
     h, w, bands = downsampled.shape
     
     if num_slices is None or num_slices >= bands:
@@ -382,7 +527,7 @@ def vis_3D_slices_interactive(data_cube, spacing=1, stride=3, num_slices=20, sav
 
     fig = go.Figure(data=surfaces)
     fig.update_layout(
-        title='3D hyperspectral cube',
+        title=title if title else 'HSI 3D stack',
         scene=dict(
             xaxis=dict(showticklabels=False, title='Spatial axis'),
             yaxis=dict(showticklabels=False, title='Spatial axis'),
@@ -394,6 +539,6 @@ def vis_3D_slices_interactive(data_cube, spacing=1, stride=3, num_slices=20, sav
     )
 
     if save:
-        fig.write_image("3D_stack.svg")
+        fig.write_image(title if title else 'HSI_3D_stack' + ".svg")
 
     fig.show()

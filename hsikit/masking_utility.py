@@ -3,7 +3,24 @@ import matplotlib.pyplot as plt
 from skimage.measure import label
 from scipy.ndimage import find_objects, generate_binary_structure, binary_closing
 
-def get_valid_regions(binary_mask, true_threshold, n_regions):
+def get_valid_regions(binary_mask: np.ndarray, true_threshold: float, n_regions: int) -> list[tuple[slice, slice]]:
+    """
+    Find objects from a binary mask and return selected regions.
+
+    Parameters
+    ----------
+    binary_mask : np.ndarray
+        Bool/binary mask used for region selection.
+    true_threshold : float
+        Region is kept if the fraction of True pixels is >= threshold (0-1).
+    n_regions : int
+        Maximum number of regions to return.
+
+    Returns
+    -------
+    list[tuple[slice, slice]]
+        Selected regions represented as slices.
+    """
     labeled_mask = label(binary_mask)
     regions = find_objects(labeled_mask)
 

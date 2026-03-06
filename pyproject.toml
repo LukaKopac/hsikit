@@ -16,7 +16,10 @@ dependencies = [
     "numpy",
     "matplotlib",
     "scikit-learn",
-    "scipy"
+    "scikit-image",
+    "scipy",
+    "plotly",
+    "tifffile"
 ]
 
 [project.urls]
