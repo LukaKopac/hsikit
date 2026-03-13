@@ -5,6 +5,37 @@ import tifffile
 import os
 from pathlib import Path
 
+def find_hsi_basepaths(root_folder: str, suffix: str = "_refl") -> list[str]:
+    """
+    Finds HSI basepaths in a parent/root folder. Compatible with load_hsi_raw function.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the root folder
+    suffix : str
+        Suffix of the wanted files, default "_refl"
+
+    Returns
+    -------
+    list[str]
+        A list of HSI basepaths.
+    """
+    basepaths = []
+    for dirpath, _, filenames in os.walk(root_folder):
+        filenames_lower = [f.lower() for f in filenames]  # for raw match
+
+        for f in filenames:
+            if f.lower().endswith('.hdr') and suffix.lower() in f.lower():
+                base = f[:-4]  # remove '.hdr'
+                raw_name = base + '.raw'
+
+                # Check if matching .raw file exists (case-insensitive)
+                if raw_name.lower() in filenames_lower:
+                    full_path = os.path.join(dirpath, base)
+                    basepaths.append(full_path)
+    return basepaths
+
 def load_hsi_raw(base_path: str, return_metadata: bool = False, verbose: bool = False) -> NDArray | tuple[NDArray, dict]:
     """
     Loads a hyperspectral data cube from a .raw + .hdr pair.
@@ -104,37 +135,6 @@ def load_wavelengths(hdr_file_path: str) -> NDArray:
     print("Min wavelength:", np.min(wavelengths))
     return wavelengths
 
-def find_hsi_basepaths(root_folder: str, suffix: str = "_refl") -> list[str]:
-    """
-    Finds HSI basepaths in a parent/root folder. Compatible with load_hsi_raw function.
-
-    Parameters
-    ----------
-    root_folder : str
-        Path to the root folder
-    suffix : str
-        Suffix of the wanted files, default "_refl"
-
-    Returns
-    -------
-    list[str]
-        A list of HSI basepaths.
-    """
-    basepaths = []
-    for dirpath, _, filenames in os.walk(root_folder):
-        filenames_lower = [f.lower() for f in filenames]  # for raw match
-
-        for f in filenames:
-            if f.lower().endswith('.hdr') and suffix.lower() in f.lower():
-                base = f[:-4]  # remove '.hdr'
-                raw_name = base + '.raw'
-
-                # Check if matching .raw file exists (case-insensitive)
-                if raw_name.lower() in filenames_lower:
-                    full_path = os.path.join(dirpath, base)
-                    basepaths.append(full_path)
-    return basepaths
-
 def load_sample_mapping(txt_path: str) -> dict[str, list[str]]:
     """
     Loads species mapping from a text file.
@@ -164,7 +164,7 @@ def load_sample_mapping(txt_path: str) -> dict[str, list[str]]:
                 mapping[scene.strip()] = species
     return mapping
 
-def batch_load_hsi(root_folder: str,
+def load_hsi_batch(root_folder: str,
                    suffix: str = "refl",
                    return_metadata: bool = False,
                    return_wavelengths: bool = False,

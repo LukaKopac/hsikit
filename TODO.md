@@ -7,7 +7,7 @@ This is a todo file for Python package **hsikit**.
 Tasks related to new content and functionality.
 
 ### Related to *temp_bg_classes.py*
-- [ ] Add other automatic masking options  
+- [ ] Add use of other automatic masking options  
 - [ ] Add the option to not use mapping file/different kind of mapping file/list of labels  
 - [ ] Add an option to either return dictionary or directly X matrix (n_samples, n_features)  
 - [ ] Add subsampling options such as 5x5 or 10x10 pixel mean/median aggregation  
@@ -17,6 +17,7 @@ Tasks related to new content and functionality.
 
 ### Related to *masking_utility.py*
 - [ ] Add manual interactive masking options (pixel/wider pixel area eg. 5x5, rectangle, polygon)  
+- [ ] Add SAM masking function
 
 ### Other
 - [ ] Outlier and dead pixel detection/removal

@@ -13,7 +13,8 @@ from typing import Optional
 
 def convert_to_reflectance(cube: NDArray) -> NDArray:
     """
-    Divides all values in a hyperspectral cube by 10,000.
+    Divides all values in a hypercube by 10,000.  
+    Returns values as float32.
 
     Parameters
     ----------
@@ -32,7 +33,8 @@ def normalize_min_max(
     return_params: bool = False
 ) -> NDArray | tuple[NDArray, NDArray, NDArray]:
     """
-    Min-max normalizes a 3D hyperspectral cube
+    Min-max normalizes a hypercube.
+
 
     Parameters
     ----------
@@ -63,7 +65,7 @@ def normalize_min_max(
 
 def normalize_mean_std(cube: NDArray, return_params: bool = False) -> NDArray | tuple[NDArray, NDArray, NDArray]:
     """
-    Standardizes a 3D hyperspectral cube using mean and std.
+    Standardizes a hypercube using mean and std.
 
     Parameters
     ----------
@@ -78,7 +80,7 @@ def normalize_mean_std(cube: NDArray, return_params: bool = False) -> NDArray | 
         If return_params is False, returns standardized cube (H, W, B).
         If True, returns a tuple:
             (standardized_cube, mean_vals, std_vals),
-            where mean_vals and std_vals are NDArray of shape (B,)
+            where mean_vals and std_vals are NDArray of shape (B,).
     """
     h, w, b = cube.shape
     X = cube.reshape(-1, b)
@@ -98,7 +100,7 @@ def apply_pca(
     return_model: bool = False
 ) -> NDArray | tuple[NDArray, PCA]:
     """
-    Applies PCA on a 3D hyperspectral cube.
+    Applies PCA on a hypercube.
 
     Parameters
     ----------
@@ -141,7 +143,7 @@ def apply_pca(
 
 def plot_band_image(cube: NDArray, band_index: int, title: Optional[str] = None, cmap: str = 'gray', show_grid: bool = False) -> None:
     """
-    Plots a single specified band image from a 3D hyperspectral cube.
+    Plots a single specified band image from a hypercube.
 
     Parameters
     ----------
@@ -181,7 +183,7 @@ def plot_band_image(cube: NDArray, band_index: int, title: Optional[str] = None,
 
 def plot_rgb_composite(cube: NDArray, bands: tuple = (50, 150, 250), title: Optional[str] = None, scale_each_band: bool = True) -> None:
     """
-    Create and display an RGB composite from selected 3 bands of a hyperspectral cube.
+    Create and display an RGB composite from selected 3 bands of a hypercube.
 
     Parameters
     ----------
@@ -226,7 +228,7 @@ def plot_spectra(
     title: Optional[str] = None
 ) -> None:
     """
-    Plot spectral profiles from specific pixels of HSI 3D array, the average spectrum, or both.
+    Plot spectral profiles from specific pixels of a hypercube, the average spectrum, or both.  
     Default plots only the average spectrum of the whole cube.
 
     Parameters
@@ -293,7 +295,7 @@ def plot_mean_spectrum_with_std(
     color: str = 'blue'
 ) -> None:
     """
-    Plot the mean spectrum with ±1 standard deviation as a shaded area.
+    Plot the mean spectrum of a hypercube with ±1 standard deviation as a shaded area.
 
     Parameters
     ----------
@@ -346,7 +348,7 @@ def plot_spectral_histogram(
     title: Optional[str] = None
 ) -> None:
     """
-    Plot a histogram of reflectance/intensity values from a single band or entire cube.
+    Plot a histogram of reflectance/intensity values from a single band or entire hypercube.
 
     Parameters
     ----------
@@ -392,7 +394,7 @@ def plot_spectral_histogram(
     plt.legend()
     plt.show()
 
-def vis_3D_slices(
+def plot_3D_slices(
     cube: NDArray,
     spacing: float = 10,
     num_slices: int = 10,
@@ -424,50 +426,58 @@ def vis_3D_slices(
     """
     h, w, b = cube.shape
 
-    total_bands = cube.shape[2]
+    if mask is not None and mask.shape != (h, w):
+        raise ValueError(f"Mask must have shape ({h}, {w})")
+
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
     if num_slices is None or num_slices >= b:
-        slices = np.arange(b)
+        bands = np.arange(b)
     else:
-        slices = np.linspace(0, b - 1, num_slices, dtype=int)
+        bands = np.linspace(0, b - 1, num_slices, dtype=int)
+
+    x, y = np.meshgrid(np.arange(w), np.arange(h))
 
     fig = plt.figure(figsize=(14, 8))
     ax = fig.add_subplot(111, projection='3d')
-    
-    for i, band in enumerate(slices):
+
+    for i, band in enumerate(bands):
         img = cube[:, :, band]
-        x, y = np.meshgrid(np.arange(w), np.arange(h))
-        z = np.full_like(x, (len(slices) -1 - i) * spacing)
     
-        img_norm = (img - img.min()) / (img.max() - img.min() + 1e-6)
+        den = img.max() - img.min()
+        img_norm = np.zeros_like(img) if den == 0 else (img - img.min()) / den
     
         if mask is not None:
-            img = np.where(mask, img_norm, np.nan)
-            alpha = mask.astype(float)
+            alpha = (mask > 0).astype(float)
         else:
-            img = img_norm
             alpha = np.ones_like(img_norm)
 
-        rgba = cmap(img)
+        rgba = cmap(img_norm)
         rgba[..., -1] = alpha
         
-        ax.plot_surface(x, y, z, rstride=stride, cstride=stride, facecolors=rgba, shade=False)
+        z = np.full_like(x, (len(bands) -1 - i) * spacing)
+
+        ax.plot_surface(x, y, z, rstride=stride, cstride=stride, facecolors=rgba, shade=False, lw=0, antialiased=False)
         print(f"Rendered band {band}")
     
-    ax.set_box_aspect((w, h, spacing * len(slices)))
+    ax.set_box_aspect((w, h, spacing * len(bands)))
     ax.set_xlim(0, w)
     ax.set_ylim(0, h)
-    ax.set_zlim(0, spacing * len(slices))
+    ax.set_zlim(0, spacing * len(bands))
     ax.set_xlabel('Spatial axis')
     ax.set_ylabel('Spatial axis')
     ax.set_zlabel('Spectral axis')
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])
+    ax.set_proj_type('persp')
     ax.view_init(elev=45, azim=45)
+
     plt.tight_layout()
     plt.show()
 
-def vis_3D_slices_interactive(
+def plot_3D_slices_interactive(
     cube: NDArray,
     spacing: float = 1,
     stride: int = 3,
