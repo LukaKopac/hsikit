@@ -20,18 +20,22 @@ Tasks related to new content and functionality.
 - [ ] Add SAM masking function
 
 ### Other
-- [ ] Outlier and dead pixel detection/removal
+- [ ] Outlier and dead pixel detection/removal ({base_utils})
+- [ ] Direct spectral extraction (mean/median per area)
 
 ## Fixes
 
 Tasks related to fixes, cleaning and organization.
 
+### General
+- [ ] Reorganize the package structure - supporting/internal folders and modules  
+
 ### Related to *temp_bg_classes.py*
-- [ ] Clean and organize temp_bg_classes.py - merge into one class  
+- [ ] Clean and organize temp_bg_classes.py - merge into single class  
 
 ### Related to *base_utils.py*
 - [ ] Consider renaming/reorganizing into two modules (utils + visualization)  
-- [ ] Possibly remove certain utility functions that aren't vital/useful  
+- [ ] Possibly remove certain utility functions that aren't vital/useful - or add to hidden folder  
 
 ### Related to *README.md*
 - [ ] Write an actual README.md file / restructure it  
