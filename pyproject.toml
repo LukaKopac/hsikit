@@ -23,4 +23,4 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "tbd"
+Homepage = "https://github.com/LukaKopac/hsikit"
