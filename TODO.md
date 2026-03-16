@@ -9,19 +9,19 @@ Tasks related to new content and functionality.
 ### Related to *temp_bg_classes.py*
 - [ ] Add use of other automatic masking options  
 - [ ] Add the option to not use mapping file/different kind of mapping file/list of labels  
-- [ ] Add an option to either return dictionary or directly X matrix (n_samples, n_features)  
-- [ ] Add subsampling options such as 5x5 or 10x10 pixel mean/median aggregation  
 
 ### Related to *preprocessing.py*
 - [ ] Add {preprocessing} options (SNV, MSC, SG 1st and 2nd derivative)  
 
 ### Related to *masking_utility.py*
 - [ ] Add manual interactive masking options (pixel/wider pixel area eg. 5x5, rectangle, polygon)  
-- [ ] Add SAM masking function
+- [ ] Add SAM masking function  
 
 ### Other
-- [ ] Outlier and dead pixel detection/removal ({base_utils})
-- [ ] Direct spectral extraction (mean/median per area)
+- [ ] Outlier and dead pixel detection/removal ({base_utils})  
+- [ ] Direct spectral extraction (mean/median per area)  
+- [ ] Add cube subsampling options such as 5x5 or 10x10 pixel mean/median aggregation  
+- [ ] Convert dictionary of cubes to X (n_samples, n_features) and y (n_samples) matrices (keep track of individual samples)  
 
 ## Fixes
 
@@ -42,8 +42,9 @@ Tasks related to fixes, cleaning and organization.
 
 ## DONE
 
+- [x] Add docstrings and type hints for functions  
 - [x] Split masking into *binary_masks.py* and *masking_utility.py*  
 - [x] Rename functions from "import..." to "load..."  
-- [x] Create GitHub organization todo.md  
+- [x] Create GitHub organization TODO.md  
 - [x] Add requirements.txt  
 - [x] Init project repo and publish project on GitHub (link: [text](https://github.com/LukaKopac/hsikit))  
