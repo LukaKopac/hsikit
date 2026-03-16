@@ -1,7 +1,7 @@
 matplotlib>=3.10
 numpy>=2.2
 plotly>=6.1
-scikit-image>=0.25
+scikit-image>=0.26
 scikit-learn>=1.6
 scipy>=1.15
 tifffile>=2025.1
