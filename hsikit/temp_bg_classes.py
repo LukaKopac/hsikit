@@ -4,10 +4,10 @@ from pathlib import Path
 import re
 import os
 
-from hsi_io import batch_load_hsi, find_hsi_basepaths, load_sample_mapping, load_hsi_raw, load_wavelengths
-from base_utils import convert_to_reflectance
-from binary_masks import mask_top_contrast, mask_top_contrastV2, fixed_rect_extraction
-from masking_utility import extract_sample_cubes_from_masks
+from .hsi_io import load_hsi_batch, find_hsi_basepaths, load_sample_mapping, load_hsi_raw, load_wavelengths
+from .base_utils import convert_to_reflectance
+from .binary_masks import mask_top_contrast, mask_top_contrastV2, fixed_rect_extraction
+from .masking_utility import extract_sample_cubes_from_masks
 
 
 
@@ -174,7 +174,7 @@ class HSIProcessor:
         self.samples_dict = {}
 
     def load(self, suffix='refl'):
-        self.cubes, self.meta, self.wl = batch_load_hsi(
+        self.cubes, self.meta, self.wl = load_hsi_batch(
             root_folder=self.folder,
             suffix=suffix,
             return_wavelengths=True,
@@ -381,7 +381,7 @@ class HSIProcessorV2:
         self.samples_dict = {}
 
     def load(self, suffix='refl'):
-        self.cubes, self.meta, self.wl, self.cube_names = batch_load_hsi(
+        self.cubes, self.meta, self.wl, self.cube_names = load_hsi_batch(
             root_folder=self.folder,
             suffix=suffix,
             return_wavelengths=True,

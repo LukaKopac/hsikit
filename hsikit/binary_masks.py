@@ -10,7 +10,7 @@ from scipy.ndimage import gaussian_filter, generate_binary_structure, binary_clo
 
 from typing import Optional, Literal
 
-from masking_utility import otsu_separation_score
+from .masking_utility import otsu_separation_score
 
 # Masks
 
