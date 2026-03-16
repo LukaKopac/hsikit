@@ -11,23 +11,6 @@ from typing import Optional
 
 # Basic utility, processing, scaling, normalization, PCA
 
-def convert_to_reflectance(cube: NDArray) -> NDArray:
-    """
-    Divides all values in a hypercube by 10,000.  
-    Returns values as float32.
-
-    Parameters
-    ----------
-    cube : NDArray
-        HSI 3D array.
-
-    Returns
-    -------
-    NDArray
-        Cube with values divided by 10,000.
-    """
-    return cube.astype(np.float32) / 10000.0
-
 def normalize_min_max(
     cube: NDArray,
     return_params: bool = False

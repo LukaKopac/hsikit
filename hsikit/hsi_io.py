@@ -12,9 +12,9 @@ def find_hsi_basepaths(root_folder: str, suffix: str = "_refl") -> list[str]:
     Parameters
     ----------
     root_folder : str
-        Path to the root folder
+        Path to the root folder.
     suffix : str
-        Suffix of the wanted files, default "_refl"
+        Suffix of the wanted files, default "_refl".
 
     Returns
     -------
@@ -36,7 +36,7 @@ def find_hsi_basepaths(root_folder: str, suffix: str = "_refl") -> list[str]:
                     basepaths.append(full_path)
     return basepaths
 
-def load_hsi_raw(base_path: str, return_metadata: bool = False, verbose: bool = False) -> NDArray | tuple[NDArray, dict]:
+def load_hsi_raw(base_path: str, return_metadata: bool = False, scale_to_reflectance: bool = True, verbose: bool = False) -> NDArray | tuple[NDArray, dict]:
     """
     Loads a hyperspectral data cube from a .raw + .hdr pair.
 
@@ -46,8 +46,10 @@ def load_hsi_raw(base_path: str, return_metadata: bool = False, verbose: bool = 
         Path to file without extension (e.g., 'folder/file' for 'folder/file.raw').
     return_metadata : bool
         If True, also returns the metadata dictionary.
+    scale_to_reflectance : bool
+        If True (default), divide values by 10000 to convert to reflectance.
     verbose : bool
-        If True, prints 'Loaded HSI data (shape)'
+        If True, prints 'Loaded HSI data (shape)'.
 
     Returns
     -------
@@ -91,6 +93,10 @@ def load_hsi_raw(base_path: str, return_metadata: bool = False, verbose: bool = 
     # Load and reshape .raw data according to interleave
     flat_data = np.fromfile(raw_path, dtype=dtype)
 
+    if scale_to_reflectance:
+        flat_data = flat_data.astype(np.float32, copy=False)
+        flat_data /= 10000.0
+
     if interleave == 'bil':
         cube = flat_data.reshape((lines, bands, samples))
         cube = np.transpose(cube, (0, 2, 1))
@@ -101,7 +107,7 @@ def load_hsi_raw(base_path: str, return_metadata: bool = False, verbose: bool = 
         cube = flat_data.reshape((lines, samples, bands))
     else:
         raise ValueError(f"Unsupported interleave format: {interleave}")
-
+    
     if verbose:
         print(f"Loaded HSI data cube: {lines} rows x {samples} cols x {bands} bands")
 
@@ -110,19 +116,21 @@ def load_hsi_raw(base_path: str, return_metadata: bool = False, verbose: bool = 
     else:
         return cube
 
-def load_wavelengths(hdr_file_path: str) -> NDArray:
+def load_wavelengths(hdr_file_path: str, verbose: bool = False) -> NDArray:
     """
     Loads wavelengths from .hdr file and return them in a numpy array.
 
     Parameters
     ----------
     hdr_file_path : str
-        Path to the .hdr file
+        Path to the .hdr file.
+    verbose : bool
+        Whether to print min, max and number of wavelengths.
 
     Returns
     -------
     NDArray
-        1D array of wavelengths
+        1D array of wavelengths.
     """
     with open(hdr_file_path, 'r') as file:
         hdr_data = file.read()
@@ -130,9 +138,12 @@ def load_wavelengths(hdr_file_path: str) -> NDArray:
     wavelengths_list = wavelengths_str.split(',')
     wavelengths = [float(value.strip()) for value in wavelengths_list]
     wavelengths = np.array(wavelengths)
-    print("Number of wavelengths:", len(wavelengths))
-    print("Max wavelength:", np.max(wavelengths))
-    print("Min wavelength:", np.min(wavelengths))
+
+    if verbose:
+        print("Number of wavelengths:", len(wavelengths))
+        print("Max wavelength:", np.max(wavelengths))
+        print("Min wavelength:", np.min(wavelengths))
+        
     return wavelengths
 
 def load_sample_mapping(txt_path: str) -> dict[str, list[str]]:
@@ -176,15 +187,15 @@ def load_hsi_batch(root_folder: str,
     Parameters
     ----------
     root_folder : str
-        Path to root folder containing .hdr/.raw pairs
+        Path to root folder containing .hdr/.raw pairs.
     suffix : str
-        Filename suffix to filter (default "refl")
+        Filename suffix to filter (default "refl").
     return_metadata : bool
-        if True, include metadata dicts for each cube
+        if True, include metadata dicts for each cube.
     return_wavelengths : bool
-        if True, include wavelengths from the first .hdr
+        if True, include wavelengths from the first .hdr.
     return_names : bool
-        if True, include list of cube names
+        if True, include list of cube names.
 
     Returns
     -------
