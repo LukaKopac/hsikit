@@ -5,7 +5,6 @@ import re
 import os
 
 from .hsi_io import load_hsi_batch, find_hsi_basepaths, load_sample_mapping, load_hsi_raw, load_wavelengths
-from .base_utils import convert_to_reflectance
 from .binary_masks import mask_top_contrast, mask_top_contrastV2, fixed_rect_extraction
 from .masking_utility import extract_sample_cubes_from_masks
 
@@ -203,10 +202,6 @@ class HSIProcessor:
 
         return self
 
-    def to_reflectance(self):
-        self.reflectance = [convert_to_reflectance(np.array(c)) for c in self.cubes]
-        return self
-
     def compute_masks(self, min_size=1800, manual_max_band=None, visualize=False):
         self.masks = [
             mask_top_contrast(c, min_size=min_size, manual_max_band=manual_max_band, visualize=visualize)
@@ -329,8 +324,6 @@ class HSIProcessorV2:
         Imports all scenes from the folder, reading both the cubes and metadata.
     load_mapping()
         Parses the species mapping file into `translation` and `mapping`.
-    to_reflectance()
-        Converts all loaded cubes to reflectance.
     compute_masks(min_size=1800, ycrop=0, xcrop=0, manual_max_band=None, visualize=False)
         Computes one foreground mask per cube using a top-contrast heuristic.
     add_rectangles(width=50, height=90, min_frac=0.9)
@@ -349,7 +342,6 @@ class HSIProcessorV2:
     ...     HSIProcessorV2(folder)
     ...     .load()
     ...     .load_mapping()
-    ...     .to_reflectance()
     ...     .compute_masks()
     ...     .add_rectangles()
     ...     .extract_samples()
@@ -411,10 +403,6 @@ class HSIProcessorV2:
             species_list = [self.translation.get(word.strip(), word.strip()) for word in species_part.split(',')]
             self.mapping[scene_id] = species_list
 
-        return self
-
-    def to_reflectance(self):
-        self.reflectance = [convert_to_reflectance(np.array(c)) for c in self.cubes]
         return self
 
     def compute_masks(self, min_size=1800, ycrop=0, xcrop=0, manual_max_band=None, visualize=False):
