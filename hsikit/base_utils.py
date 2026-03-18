@@ -2,12 +2,14 @@ import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from matplotlib.colors import Colormap
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 from sklearn.decomposition import PCA
 import plotly.graph_objects as go
 import plotly.io as pio
 pio.renderers.default = 'notebook'
 
-from typing import Optional
+from typing import Optional, Literal
 
 # Basic utility, processing, scaling, normalization, PCA
 
@@ -131,7 +133,7 @@ def plot_band_image(cube: NDArray, band_index: int, title: Optional[str] = None,
     Parameters
     ----------
     cube : NDArray
-        HSI 3D array (H, W, B).
+        HSI 3D array, expected shape (H, W, B).
     band_index : int
         Index of the band/component to display.
     title : str
@@ -171,7 +173,7 @@ def plot_rgb_composite(cube: NDArray, bands: tuple = (50, 150, 250), title: Opti
     Parameters
     ----------
     cube : NDArray
-        HSI 3D array (H, W, B).
+        HSI 3D array, expected shape (H, W, B).
     bands : tuple
         Band indices to use for (R, G, B).
     title : str
@@ -217,7 +219,7 @@ def plot_spectra(
     Parameters
     ----------
     cube : NDArray
-        HSI 3D array (H, W, B).
+        HSI 3D array, expected shape (H, W, B).
     coords : Optional[list[tuple[int, int]]]
         Optional list of pixel locations (row, col).
     wavelengths : Optional[list | NDArray]
@@ -283,7 +285,7 @@ def plot_mean_spectrum_with_std(
     Parameters
     ----------
     cube : NDArray
-        3D hyperspectral data (H, W, B).
+        HSI 3D array, expected shape (H, W, B).
     mask : Optional[NDArray]
         Optional binary mask (H, W) to restrict region of interest.
     wavelengths : Optional[list | NDArray]
@@ -297,7 +299,7 @@ def plot_mean_spectrum_with_std(
     -------
     None
     """
-    h, w, b = cube.shape
+    b = cube.shape[-1]
     x_axis = wavelengths if wavelengths is not None else np.arange(b)
 
     if mask is not None:
@@ -336,7 +338,7 @@ def plot_spectral_histogram(
     Parameters
     ----------
     cube : NDArray
-        HSI 3D array (H, W, B).
+        HSI 3D array, expected shape (H, W, B).
     band : Optional[int]
         If specified, shows histogram for that band; otherwise flattens all bands.
     mask : Optional[NDArray]
@@ -391,7 +393,7 @@ def plot_3D_slices(
     Parameters
     ----------
     cube : NDArray
-        HSI 3D array (H, W, B).
+        HSI 3D array, expected shape (H, W, B).
     spacing : float
         Distance between slices on z-axis.
     num_slices : int
@@ -474,7 +476,7 @@ def plot_3D_slices_interactive(
     Parameters
     ----------
     cube : NDArray
-        HSI 3D array (H, W, B).
+        HSI 3D array, expected shape (H, W, B).
     spacing : float
         Distance between slices on Z axis.
     stride : int
@@ -535,3 +537,134 @@ def plot_3D_slices_interactive(
         fig.write_image(title if title else 'HSI_3D_stack' + ".svg")
 
     fig.show()
+
+
+def plot_hsi_cube(
+    cube: NDArray,
+    cmap: str = 'jet',
+    top_face_mode: Literal['single', 'mean', 'rgb'] = 'mean',  # options: 'single', 'mean', 'rgb'
+    single_band_index: int = 0,   # used if top_face_mode=='single'
+    rgb_bands: tuple[int, int, int] = (0, 1, 2),  # used if top_face_mode=='rgb'
+    rstride: int = 2,
+    cstride: int = 2,
+    ax: Axes | None = None
+) -> tuple[Figure, Axes]:
+    """
+    Render a hyperspectral data cube as a 3D box with five colored faces.
+    Values will be normalized per face for visualization.
+
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array, expected shape (H, W, B).
+    cmap : str
+        Name of a Matplotlib colormap used for scalar face coloring ('grey', 'viridis', 'jet', 'plasma', 'magma').
+    top_face_mode : Literal['single', 'mean', 'rgb']
+        Strategy used to color the top face:
+        - 'single': visualize a single spectral band
+        - 'mean': average across all bands
+        - 'rgb': RGB composite from three selected bands
+    single_band_index : int
+        Band index used when top_face_mode='single'.
+    rgb_bands : tuple[int, int, int]
+        Band indices used when top_face_mode='rgb'.
+    rstride : int
+        Row sampling stride for surface plotting (reduces rendering density).
+    cstride : int
+        Column sampling stride for surface plotting (reduces rendering density).
+    ax : Axes | None
+        Existing 3D axes to plot into. If None, a new figure and axes are created.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The created or associated figure.
+    ax : matplotlib.axes.Axes
+        The 3D axes containing the plot.
+    """
+    rows, cols, bands = cube.shape
+
+    def normalize(data):
+        dmin, dmax = data.min(), data.max()
+        if dmax == dmin:
+            return np.zeros_like(data)
+        return np.clip((data - dmin) / (dmax - dmin), 0, 1)
+
+    if ax is None:
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+    else:
+        fig = ax.figure
+
+    cmap_obj = plt.get_cmap(cmap)
+
+    # --- Left face ---
+    x_left = np.zeros((rows, bands))
+    y_left = np.repeat(np.arange(rows)[:, None], bands, axis=1)
+    z_left = np.tile(np.arange(bands), (rows, 1))
+    left_face = normalize(cube[:, 0, :])
+    left_face_rgb = cmap_obj(left_face)[:, :, :3]
+    ax.plot_surface(x_left, y_left, z_left, facecolors=left_face_rgb,
+                    rstride=rstride, cstride=cstride, linewidth=1, alpha=1, shade=False)
+
+    # --- Right face ---
+    x_right = np.full((rows, bands), cols)
+    y_right = y_left
+    z_right = z_left
+    right_face = normalize(cube[:, -1, :])
+    right_face_rgb = cmap_obj(right_face)[:, :, :3]
+    ax.plot_surface(x_right, y_right, z_right, facecolors=right_face_rgb,
+                    rstride=rstride, cstride=cstride, linewidth=1, alpha=1, shade=False)
+
+    # --- Back face ---
+    x_back, z_back = np.meshgrid(np.arange(cols), np.arange(bands), indexing='ij')
+    y_back = np.zeros_like(x_back)
+    back_face = normalize(cube[0, :, :])
+    back_face_rgb = cmap_obj(back_face)[:, :, :3]
+    ax.plot_surface(x_back, y_back, z_back, facecolors=back_face_rgb,
+                    rstride=rstride, cstride=cstride, linewidth=1, alpha=1, shade=False)
+
+    # --- Front face ---
+    y_front = np.full_like(x_back, rows)
+    front_face = normalize(cube[-1, :, :])
+    front_face_rgb = cmap_obj(front_face)[:, :, :3]
+    ax.plot_surface(x_back, y_front, z_back, facecolors=front_face_rgb,
+                    rstride=rstride, cstride=cstride, linewidth=1, alpha=1, shade=False)
+
+    # --- Top face ---
+    x_top, y_top = np.meshgrid(np.arange(cols), np.arange(rows), indexing='xy')
+
+    if top_face_mode == 'single':
+        z_top = np.full_like(x_top, bands)
+        top_face = normalize(cube[:, :, single_band_index])
+        top_face_rgb = plt.get_cmap(cmap)(top_face)[:, :, :3]
+
+    elif top_face_mode == 'mean':
+        z_top = np.full_like(x_top, bands)
+        top_face = normalize(np.mean(cube, axis=2))
+        top_face_rgb = cmap_obj(top_face)[:, :, :3]
+
+    elif top_face_mode == 'rgb':
+        z_top = np.full_like(x_top, bands)
+        r = normalize(cube[:, :, rgb_bands[0]])
+        g = normalize(cube[:, :, rgb_bands[1]])
+        b = normalize(cube[:, :, rgb_bands[2]])
+        top_face_rgb = np.stack([r, g, b], axis=2)
+
+    else:
+        raise ValueError("Invalid top_face_mode. Choose 'single', 'mean', or 'rgb'.")
+
+    ax.plot_surface(x_top, y_top, z_top, facecolors=top_face_rgb,
+                    rstride=rstride, cstride=cstride, linewidth=1, alpha=1, shade=False)
+
+    # --- Aesthetics ---
+    ax.set_xlim(0, cols)
+    ax.set_ylim(0, rows)
+    ax.set_zlim(0, bands)
+    ax.set_box_aspect((cols, rows, bands))
+    ax.view_init(elev=30, azim=45)
+    ax.axis('off')
+
+    plt.tight_layout()
+
+    return fig, ax
