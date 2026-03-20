@@ -49,4 +49,4 @@ Tasks related to fixes, cleaning and organization.
 - [x] Rename functions from "import..." to "load..."  
 - [x] Create GitHub organization TODO.md  
 - [x] Add requirements.txt  
-- [x] Init project repo and publish project on GitHub (link: [text](https://github.com/LukaKopac/hsikit))  
+- [x] Init project repo and publish project on GitHub (link: [hsikit](https://github.com/LukaKopac/hsikit))  
