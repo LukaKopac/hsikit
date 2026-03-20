@@ -542,16 +542,16 @@ def plot_3D_slices_interactive(
 def plot_hsi_cube(
     cube: NDArray,
     cmap: str = 'jet',
-    top_face_mode: Literal['single', 'mean', 'rgb'] = 'mean',  # options: 'single', 'mean', 'rgb'
+    top_face_mode: Literal['single', 'mean', 'rgb'] = 'single',  # options: 'single', 'mean', 'rgb'
     single_band_index: int = 0,   # used if top_face_mode=='single'
     rgb_bands: tuple[int, int, int] = (0, 1, 2),  # used if top_face_mode=='rgb'
-    rstride: int = 2,
-    cstride: int = 2,
+    normalization: Literal['global', 'percentile', 'surface'] = 'percentile',
+    percentile_range: tuple[float, float] = (1, 99),
+    stride: int | tuple[int, int] = 2,
     ax: Axes | None = None
 ) -> tuple[Figure, Axes]:
     """
-    Render a hyperspectral data cube as a 3D box with five colored faces.
-    Values will be normalized per face for visualization.
+    Render a HSI 3D array as a box with five colored faces.
 
     Parameters
     ----------
@@ -560,7 +560,7 @@ def plot_hsi_cube(
     cmap : str
         Name of a Matplotlib colormap used for scalar face coloring ('grey', 'viridis', 'jet', 'plasma', 'magma').
     top_face_mode : Literal['single', 'mean', 'rgb']
-        Strategy used to color the top face:
+        Strategy used to color the top face (default = 'single'):
         - 'single': visualize a single spectral band
         - 'mean': average across all bands
         - 'rgb': RGB composite from three selected bands
@@ -568,10 +568,15 @@ def plot_hsi_cube(
         Band index used when top_face_mode='single'.
     rgb_bands : tuple[int, int, int]
         Band indices used when top_face_mode='rgb'.
-    rstride : int
-        Row sampling stride for surface plotting (reduces rendering density).
-    cstride : int
-        Column sampling stride for surface plotting (reduces rendering density).
+    normalization : Literal['global', 'percentile', 'surface']
+        Min-max color normalization strategy (default = 'percentile'):
+        - 'global': normalize surface colors by min and max values of the entire cube
+        - 'percentile': percentile based normalization instead of min-max (based on percentile_range parameter)
+        - 'surface': normalize surface colors by min and max values of each surface individually
+    percentile_range : tuple[float, float]
+        Percentile range when normalization = 'percentile'
+    stride : int | tuple[int, int]
+        Row and column sampling stride for surface plotting (reduces rendering density).
     ax : Axes | None
         Existing 3D axes to plot into. If None, a new figure and axes are created.
 
@@ -584,10 +589,29 @@ def plot_hsi_cube(
     """
     rows, cols, bands = cube.shape
 
+    if isinstance(stride, int):
+        rstride = cstride = stride
+    else:
+        rstride, cstride = stride
+
+    if normalization == 'global':
+        global_min, global_max = cube.min(), cube.max()
+    elif normalization == 'percentile':
+        global_min, global_max = np.percentile(cube, percentile_range)
+    elif normalization == 'surface':
+        global_min, global_max = None, None
+    else:
+        raise ValueError(f"Normalization {normalization} is not valid (options are 'global', 'percentile' and 'surface')")
+    
     def normalize(data):
-        dmin, dmax = data.min(), data.max()
+        if normalization == 'surface':
+            dmin, dmax = data.min(), data.max()
+        else:
+            dmin, dmax = global_min, global_max
+
         if dmax == dmin:
             return np.zeros_like(data)
+        
         return np.clip((data - dmin) / (dmax - dmin), 0, 1)
 
     if ax is None:
