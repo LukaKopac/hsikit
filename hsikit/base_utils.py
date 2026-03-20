@@ -126,212 +126,197 @@ def apply_pca(
 
 # Plotting and visualization
 
-def plot_band_image(cube: NDArray, band_index: int, title: Optional[str] = None, cmap: str = 'gray', show_grid: bool = False) -> None:
+def plot_image(
+    cube: NDArray,
+    bands: int | tuple[int, int, int] = (50, 150, 250), # single band or RGB triplet
+    title: Optional[str] = None,
+    scale_each_band: bool = True, # Only relevant for RGB
+    cmap: str = 'gray', # Only relevant for single band
+    show_grid: bool = False,
+    grid_color: str = 'white',
+    grid_spacing: int = 50,
+    ax: Optional[Axes] = None
+) -> tuple[Figure, Axes]:
     """
-    Plots a single specified band image from a hypercube.
+    Plot a single band as grayscale or an RGB composite from selected bands.
 
     Parameters
     ----------
     cube : NDArray
         HSI 3D array, expected shape (H, W, B).
-    band_index : int
-        Index of the band/component to display.
-    title : str
-        Optional plot title.
+    bands : int | tuple[int, int, int]
+        If int: show single band. If tuple of 3 band indices: RGB composite.
+    title : Optional[str]
+        Plot title.
+    scale_each_band : bool
+        Whether to scale each band independently to [0, 1] (RGB only).
     cmap : str
-        Matplotlib colormap (default: 'gray').
+        Colormap for single band.
     show_grid : bool
-        If True, overlays a pixel grid for coordinate reference.
+        Overlay pixel grid for single-band view.
+    grid_color : str
+        Grid color
+    grid_spacing : int
+        Grid spacing
+    ax : Optional[Axes]
+        Existing 3D axes to plot into. If None, a new figure and axes are created.
 
     Returns
     -------
-    None
+    fig : matplotlib.figure.Figure
+        The created or associated figure.
+    ax : matplotlib.axes.Axes
+        The 3D axes containing the plot.
     """
-    plt.figure(figsize=(6, 6))
-    ax = plt.gca()
-    im = ax.imshow(cube[:, :, band_index], cmap=cmap)
-    plt.title(title or f'Band {band_index}')
-    plt.axis('on')
+    if ax is None:
+        fig = plt.figure(figsize=(6, 6))
+        ax = fig.add_subplot(111)
+    else:
+        fig = ax.figure
+
+    if isinstance(bands, int): # Single-band grayscale
+        img = cube[:, :, bands]
+        ax.imshow(img, cmap=cmap)
+        ax.set_title(title or f'Band {bands}')
+
+    elif isinstance(bands, tuple) and len(bands) == 3: # RGB composite
+        r, g, b = bands
+        rgb = np.stack([cube[:, :, r], cube[:, :, g], cube[:, :, b]], axis=-1)
+
+        if scale_each_band: # Normalize each channel independently
+            rgb_min, rgb_max = np.nanmin(rgb, axis=(0,1)), np.nanmax(rgb, axis=(0,1))
+            rgb = (rgb - rgb_min) / (rgb_max - rgb_min + 1e-8)
+
+        rgb = np.clip(rgb, 0, 1)
+        ax.imshow(rgb)
+        ax.set_title(title or f'RGB Composite (bands {r}, {g}, {b})')
+    else:
+        raise ValueError("bands must be an int (single band) or tuple of 3 (RGB)")
 
     if show_grid:
-        grid_spacing = 50
-        h, w, _ = cube.shape
+        h, w = cube.shape[:2]
         ax.set_xticks(np.arange(0, w, grid_spacing))
         ax.set_yticks(np.arange(0, h, grid_spacing))
-        ax.grid(which='both', color='white', linestyle='--', linewidth=0.7)
+        ax.grid(which='both', color=grid_color, linestyle='--', linewidth=0.7)
         ax.tick_params(length=0)
     else:
-        plt.axis('off')
+        ax.axis('off')
 
-    plt.tight_layout()
-    plt.show()
-
-def plot_rgb_composite(cube: NDArray, bands: tuple = (50, 150, 250), title: Optional[str] = None, scale_each_band: bool = True) -> None:
-    """
-    Create and display an RGB composite from selected 3 bands of a hypercube.
-
-    Parameters
-    ----------
-    cube : NDArray
-        HSI 3D array, expected shape (H, W, B).
-    bands : tuple
-        Band indices to use for (R, G, B).
-    title : str
-        Optional plot title.
-    scale_each_band : bool
-        Whether to scale each band individually to [0, 1].
-
-    Returns
-    -------
-    None
-    """
-    h, w, b = cube.shape
-    r, g, b = bands
-    rgb = np.stack([cube[:, :, r], cube[:, :, g], cube[:, :, b]], axis=-1)
-
-    if scale_each_band:
-        # Normalize each band independently to [0, 1]
-        rgb_min, rgb_max = np.nanmin(rgb), np.nanmax(rgb)
-        rgb = (rgb - rgb_min) / (rgb_max - rgb_min + 1e-8)
-
-    rgb = np.clip(rgb, 0, 1)
-
-    plt.figure(figsize=(6, 6))
-    plt.imshow(rgb)
-    plt.title(title or f'RGB Composite (Bands {r}, {g}, {b})')
-    plt.axis('off')
-    plt.tight_layout()
-    plt.show()
+    return fig, ax
 
 def plot_spectra(
     cube: NDArray,
     coords: Optional[list[tuple[int, int]]] = None,
     wavelengths: Optional[list | NDArray] = None,
     labels: Optional[list[str]] = None,
-    average: bool = True,
+    plot_average: bool = True,
+    show_std: bool = False,
+    show_min_max: bool = False,
     window_size: int = 1,
-    title: Optional[str] = None
-) -> None:
+    title: Optional[str] = None,
+    color: str = 'blue',
+    ax: Optional[Axes] = None
+) -> tuple[Figure, Axes]:
     """
-    Plot spectral profiles from specific pixels of a hypercube, the average spectrum, or both.  
-    Default plots only the average spectrum of the whole cube.
+    Plot spectral profiles from pixels, the average spectrum, with optional ±std and min/max envelopes.
 
     Parameters
     ----------
     cube : NDArray
-        HSI 3D array, expected shape (H, W, B).
-    coords : Optional[list[tuple[int, int]]]
-        Optional list of pixel locations (row, col).
+        HSI 3D array, expected shape (H, W, B)
+    coords : Optional[list[tuple[int,int]]]
+        List of pixel coordinates to plot individually.
     wavelengths : Optional[list | NDArray]
-        Optional wavelength values (length B).
+        X-axis values (length B), else band indices used.
     labels : Optional[list[str]]
-        Optional labels for each pixel.
-    average : bool
-        If True, include the average spectrum of the whole cube.
-        Default is True.
+        Labels for individual pixel spectra.
+    plot_average : bool
+        If True, plot the average spectrum of the cube.
+    show_std : bool
+        If True, plot ±1 standard deviation shaded region around the mean.
+    show_min_max : bool
+        If True, plot min/max envelope around the mean.
     window_size : int
-        Size of the square area around each coord to average (must be odd, default=1).
+        Size of square area to average around each coordinate.
     title : Optional[str]
-        Optional plot title.
+        Plot title.
+    color : str
+        Line/shading color for average spectrum.
+    ax : Optional[Axes]
+        Existing axes to plot into. Creates new figure if None.
 
     Returns
     -------
-    None
+    fig : Figure
+        Matplotlib figure
+    ax : Axes
+        Matplotlib axes
     """
     h, w, b = cube.shape
     x_axis = wavelengths if wavelengths is not None else np.arange(b)
 
-    def get_area_spectrum(center_row, center_col, size):
+    def get_area_spectrum(row, col, size):
         half = size // 2
-        row_min = max(center_row - half, 0)
-        row_max = min(center_row + half + 1, h)
-        col_min = max(center_col - half, 0)
-        col_max = min(center_col + half + 1, w)
-        area = cube[row_min:row_max, col_min:col_max, :]
+        r_min = max(row - half, 0)
+        r_max = min(row + half + 1, h)
+        c_min = max(col - half, 0)
+        c_max = min(col + half + 1, w)
+        area = cube[r_min:r_max, c_min:c_max, :]
         return area.reshape(-1, b).mean(axis=0)
-    
-    plt.figure(figsize=(8, 5))
 
+    if ax is None:
+        fig = plt.figure(figsize=(8, 5))
+        ax = fig.add_subplot(111)
+    else:
+        fig = ax.figure
+
+    # Plot individual pixel spectra
     if coords:
         for i, (row, col) in enumerate(coords):
             spectrum = get_area_spectrum(row, col, window_size)
             label = labels[i] if labels else f'Pixel ({row}, {col})'
             if window_size > 1:
                 label += f' (avg {window_size}x{window_size})'
-            plt.plot(x_axis, spectrum, label=label)
+            ax.plot(x_axis, spectrum, label=label, alpha=0.7)
 
-    if average:
-        avg_spectrum = cube.reshape(-1, b).mean(axis=0)
-        plt.plot(x_axis, avg_spectrum, label='Average Spectrum', linewidth=2.5, color='black')
+    # Plot average spectrum (with optional std or min/max)
+    if plot_average:
+        flat_cube = cube.reshape(-1, b)
+        mean_spectrum = flat_cube.mean(axis=0)
+        ax.plot(x_axis, mean_spectrum, label='Average Spectrum', color=color, linewidth=2.5)
 
-    plt.xlabel('Wavelength' if wavelengths is not None else 'Band Index')
-    plt.ylabel('Reflectance / Intensity')
-    plt.title(title or 'Spectral Profiles')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+        if show_std:
+            std_spectrum = flat_cube.std(axis=0)
+            ax.fill_between(x_axis,
+                            mean_spectrum - std_spectrum,
+                            mean_spectrum + std_spectrum,
+                            color=color, alpha=0.3, label='±1 Std Dev')
 
-def plot_mean_spectrum_with_std(
-    cube: NDArray,
-    mask: Optional[NDArray] = None,
-    wavelengths: Optional[list | NDArray] = None,
-    title: Optional[str] = None,
-    color: str = 'blue'
-) -> None:
-    """
-    Plot the mean spectrum of a hypercube with ±1 standard deviation as a shaded area.
+        if show_min_max:
+            min_spectrum = flat_cube.min(axis=0)
+            max_spectrum = flat_cube.max(axis=0)
+            ax.fill_between(x_axis,
+                            min_spectrum,
+                            max_spectrum,
+                            color=color, alpha=0.15, label='Min/Max Envelope')
 
-    Parameters
-    ----------
-    cube : NDArray
-        HSI 3D array, expected shape (H, W, B).
-    mask : Optional[NDArray]
-        Optional binary mask (H, W) to restrict region of interest.
-    wavelengths : Optional[list | NDArray]
-        Optional list of wavelengths (length B).
-    title : Optional[str]
-        Plot title.
-    color : str
-        Matplotlib line/shading color (default: 'blue').
+    ax.set_xlabel('Wavelength' if wavelengths is not None else 'Band Index')
+    ax.set_ylabel('Reflectance / Intensity')
+    ax.set_title(title or 'Spectral Profiles')
+    ax.grid(True)
+    ax.legend()
 
-    Returns
-    -------
-    None
-    """
-    b = cube.shape[-1]
-    x_axis = wavelengths if wavelengths is not None else np.arange(b)
+    return fig, ax
 
-    if mask is not None:
-        masked_cube = cube[mask]
-    else:
-        masked_cube = cube.reshape(-1, b)
-
-    mean_spectrum = masked_cube.mean(axis=0)
-    std_spectrum = masked_cube.std(axis=0)
-
-    plt.figure(figsize=(8, 5))
-    plt.plot(x_axis, mean_spectrum, label='Mean Spectrum', color=color)
-    plt.fill_between(x_axis, 
-                     mean_spectrum - std_spectrum, 
-                     mean_spectrum + std_spectrum, 
-                     color=color, alpha=0.3, label='±1 Std Dev')
-    plt.xlabel('Wavelength' if wavelengths is not None else 'Band Index')
-    plt.ylabel('Reflectance / Intensity')
-    plt.title(title or 'Mean Spectrum ± Std Dev')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-def plot_spectral_histogram(
+def plot_spectral_hist(
     cube: NDArray,
     band: Optional[int] = None,
     mask: Optional[NDArray] = None,
     bins: int = 100,
     log_scale: bool = False,
-    title: Optional[str] = None
-) -> None:
+    title: Optional[str] = None,
+    ax: Optional[Axes] = None
+) -> tuple[Figure, Axes]:
     """
     Plot a histogram of reflectance/intensity values from a single band or entire hypercube.
 
@@ -349,10 +334,15 @@ def plot_spectral_histogram(
         Whether to use logarithmic y-axis.
     title : Optional[str]
         Plot title.
+    ax : Optional[Axes]
+        Existing 3D axes to plot into. If None, a new figure and axes are created.
 
     Returns
     -------
-    None
+    fig : matplotlib.figure.Figure
+        The created or associated figure.
+    ax : matplotlib.axes.Axes
+        The 3D axes containing the plot.
     """
     if mask is not None:
         data = cube[mask]
@@ -366,18 +356,23 @@ def plot_spectral_histogram(
         values = data.ravel()
         label = 'All Bands'
 
-    plt.figure(figsize=(7, 4))
-    plt.hist(values, bins=bins, color='gray', alpha=0.8, edgecolor='black', label=label)
+    if ax is None:
+        fig = plt.figure(figsize=(7, 4))
+        ax = fig.add_subplot(111)
+    else:
+        fig = ax.figure
+    
+    ax.hist(values, bins=bins, color='gray', alpha=0.8, edgecolor='black', label=label)
     if log_scale:
-        plt.yscale('log')
+        ax.yscale('log')
 
-    plt.xlabel('Intensity / Reflectance')
-    plt.ylabel('Pixel Count')
-    plt.title(title or f'Histogram of {label}')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.legend()
-    plt.show()
+    ax.set_xlabel('Intensity / Reflectance')
+    ax.set_ylabel('Pixel Count')
+    ax.set_title(title or f'Histogram of {label}')
+    ax.grid(True)
+    ax.legend()
+
+    return fig, ax
 
 def plot_3D_slices(
     cube: NDArray,
@@ -385,8 +380,10 @@ def plot_3D_slices(
     num_slices: int = 10,
     mask: Optional[NDArray] = None,
     stride: int = 3,
-    cmap: str | Colormap = "gray"
-) -> None:
+    cmap: str | Colormap = "gray",
+    verbose: bool = False,
+    ax: Optional[Axes] = None
+) -> tuple[Figure, Axes]:
     """
     3D visualization of hyperspectral slices.
 
@@ -404,10 +401,17 @@ def plot_3D_slices(
         Meshgrid stride for rendering.
     cmap : str | Colormap
         matplotlib colormap (default "gray").
+    verbose : bool
+        Whether to print rendered band indices.
+    ax : Optional[Axes]
+        Existing 3D axes to plot into. If None, a new figure and axes are created.
 
     Returns
     -------
-    None
+    fig : matplotlib.figure.Figure
+        The created or associated figure.
+    ax : matplotlib.axes.Axes
+        The 3D axes containing the plot.
     """
     h, w, b = cube.shape
 
@@ -424,9 +428,12 @@ def plot_3D_slices(
 
     x, y = np.meshgrid(np.arange(w), np.arange(h))
 
-    fig = plt.figure(figsize=(14, 8))
-    ax = fig.add_subplot(111, projection='3d')
-
+    if ax is None:
+        fig = plt.figure(figsize=(14, 8))
+        ax = fig.add_subplot(111, projection='3d')
+    else:
+        fig = ax.figure
+    
     for i, band in enumerate(bands):
         img = cube[:, :, band]
     
@@ -444,7 +451,8 @@ def plot_3D_slices(
         z = np.full_like(x, (len(bands) -1 - i) * spacing)
 
         ax.plot_surface(x, y, z, rstride=stride, cstride=stride, facecolors=rgba, shade=False, lw=0, antialiased=False)
-        print(f"Rendered band {band}")
+        if verbose:
+            print(f"Rendered band {band}")
     
     ax.set_box_aspect((w, h, spacing * len(bands)))
     ax.set_xlim(0, w)
@@ -459,8 +467,7 @@ def plot_3D_slices(
     ax.set_proj_type('persp')
     ax.view_init(elev=45, azim=45)
 
-    plt.tight_layout()
-    plt.show()
+    return fig, ax
 
 def plot_3D_slices_interactive(
     cube: NDArray,
@@ -548,7 +555,7 @@ def plot_hsi_cube(
     normalization: Literal['global', 'percentile', 'surface'] = 'percentile',
     percentile_range: tuple[float, float] = (1, 99),
     stride: int | tuple[int, int] = 2,
-    ax: Axes | None = None
+    ax: Optional[Axes] = None
 ) -> tuple[Figure, Axes]:
     """
     Render a HSI 3D array as a box with five colored faces.
@@ -577,7 +584,7 @@ def plot_hsi_cube(
         Percentile range when normalization = 'percentile'
     stride : int | tuple[int, int]
         Row and column sampling stride for surface plotting (reduces rendering density).
-    ax : Axes | None
+    ax : Optional[Axes]
         Existing 3D axes to plot into. If None, a new figure and axes are created.
 
     Returns
@@ -688,7 +695,5 @@ def plot_hsi_cube(
     ax.set_box_aspect((cols, rows, bands))
     ax.view_init(elev=30, azim=45)
     ax.axis('off')
-
-    plt.tight_layout()
 
     return fig, ax
