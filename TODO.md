@@ -35,14 +35,15 @@ Tasks related to fixes, cleaning and organization.
 
 ### Related to *base_utils.py*
 - [ ] Consider renaming/reorganizing into two modules (utils + visualization)  
-- [ ] Possibly remove certain utility functions that aren't vital/useful - or add to hidden folder  
-- [ ] **Full cube min-max normalization (instead of per surface) in plot_hsi_cube() function**  
+- [ ] Remove certain utility functions that aren't vital/useful - or add to hidden folder   
 
 ### Related to *README.md*
 - [ ] Write an actual README.md file / restructure it  
 
 ## DONE
 
+- [x] Restructure plotting functions - add (fig, ax) return  
+- [x] Full cube min-max normalization (instead of per surface) in plot_hsi_cube() function  
 - [x] Add docstrings and type hints for functions  
 - [x] Split masking into *binary_masks.py* and *masking_utility.py*  
 - [x] Rename functions from "import..." to "load..."  
