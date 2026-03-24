@@ -549,8 +549,8 @@ def plot_3D_slices_interactive(
 def plot_hsi_cube(
     cube: NDArray,
     cmap: str = 'jet',
-    top_face_mode: Literal['single', 'mean', 'rgb'] = 'single',  # options: 'single', 'mean', 'rgb'
-    single_band_index: int = 0,   # used if top_face_mode=='single'
+    top_face_mode: Literal['single', 'mean', 'rgb'] = 'single',
+    single_band_index: int = -1,   # used if top_face_mode=='single'
     rgb_bands: tuple[int, int, int] = (0, 1, 2),  # used if top_face_mode=='rgb'
     normalization: Literal['global', 'percentile', 'surface'] = 'percentile',
     percentile_range: tuple[float, float] = (1, 99),
@@ -572,7 +572,7 @@ def plot_hsi_cube(
         - 'mean': average across all bands
         - 'rgb': RGB composite from three selected bands
     single_band_index : int
-        Band index used when top_face_mode='single'.
+        Band index used when top_face_mode='single' (default = -1).
     rgb_bands : tuple[int, int, int]
         Band indices used when top_face_mode='rgb'.
     normalization : Literal['global', 'percentile', 'surface']
@@ -615,7 +615,6 @@ def plot_hsi_cube(
             dmin, dmax = data.min(), data.max()
         else:
             dmin, dmax = global_min, global_max
-
         if dmax == dmin:
             return np.zeros_like(data)
         
