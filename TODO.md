@@ -10,9 +10,6 @@ Tasks related to new content and functionality.
 - [ ] Add use of other automatic masking options  
 - [ ] Add the option to not use mapping file/different kind of mapping file/list of labels  
 
-### Related to *preprocessing.py*
-- [ ] Add {preprocessing} options (SNV, MSC, SG 1st and 2nd derivative)  
-
 ### Related to *masking_utility.py*
 - [ ] **Add manual interactive masking options (pixel/wider pixel area eg. 5x5, rectangle, polygon)**  
 - [ ] **Add SAM masking function**  
@@ -42,6 +39,7 @@ Tasks related to fixes, cleaning and organization.
 
 ## DONE
 
+- [x] Add {preprocessing} options (SNV, MSC, SG 1st and 2nd derivative)  
 - [x] Restructure plotting functions - add (fig, ax) return  
 - [x] Full cube min-max normalization (instead of per surface) in plot_hsi_cube() function  
 - [x] Add docstrings and type hints for functions  
