@@ -3,4 +3,4 @@ from . import masking_utility
 from . import hsi_io
 from . import preprocessing
 from . import base_utils
-from . import temp_bg_classes
+from . import extractors

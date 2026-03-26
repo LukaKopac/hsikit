@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from sklearn.cluster import KMeans
 from skimage.filters import threshold_otsu
-from skimage.morphology import remove_small_holes, remove_small_objects
+from skimage.morphology import remove_small_holes, remove_small_objects, opening, disk
 from skimage.measure import shannon_entropy, label, regionprops
 from scipy.ndimage import gaussian_filter, generate_binary_structure, binary_closing, binary_opening, binary_fill_holes
 
@@ -312,6 +312,122 @@ def mask_top_contrastV2(
         plt.show()
 
     return combined_mask
+
+def mask_SAM(
+    cube: NDArray,
+    ref_spectrum: NDArray,
+    mode: str = 'otsu',
+    angle_thresh_deg: float = 10,
+    bg_reference: bool = True,
+    min_object_size: int = 500,
+    fill_holes: bool = True,
+    visualize: bool = False,
+) -> NDArray | tuple[NDArray, float]:
+    """
+    Create and clean a foreground mask using Spectral Angle Mapper (SAM) and optionally Otsu thresholding.
+
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array, expected shape (H, W, B)
+    ref_spectrum : NDArray
+        Reference array, expected shape (B,)
+    mode : string
+        Threshold set mode - either 'otsu' or 'manual'
+    angle_thresh_deg : float
+        Angle threshold if mode='manual'
+    bg_reference : NDArray
+        If the reference array belongs to background (inverts the mask)
+    min_object_size : int
+        Remove connected components smaller than this.
+    fill_holes : bool
+        Fill internal holes inside foreground objects.
+    visualize : bool
+        If True, plots input image, SAM angle image, mask before cleaning and final mask
+
+    Returns
+    -------
+    mask : NDArray
+        2D mask of shape (H, W) foreground=True, dtype=bool
+    threshold : float
+        Threshold value (returns only if mode='otsu')
+    """
+    
+    H, W, B = cube.shape
+
+    # --- reshape ---
+    pixels = cube.reshape(-1, B)
+
+    # --- valid pixels (important!) ---
+    pixel_norms = np.linalg.norm(pixels, axis=1)
+    valid_mask = pixel_norms > 1e-6
+
+    pixels_norm = np.zeros_like(pixels)
+    pixels_norm[valid_mask] = pixels[valid_mask] / pixel_norms[valid_mask, None]
+
+    ref_norm = ref_spectrum / np.linalg.norm(ref_spectrum)
+
+    # --- SAM ---
+    cos_theta = np.zeros(len(pixels))
+    cos_theta[valid_mask] = np.clip(
+        np.dot(pixels_norm[valid_mask], ref_norm), -1.0, 1.0
+    )
+
+    angles_deg = np.full(len(pixels), np.nan)
+    angles_deg[valid_mask] = np.degrees(np.arccos(cos_theta[valid_mask]))
+
+    angle_map = angles_deg.reshape(H, W)
+
+    # --- OTSU THRESHOLD ---
+    valid_angles = angle_map[~np.isnan(angle_map)]
+    
+    if mode == 'otsu':
+        thresh = threshold_otsu(valid_angles)
+    elif mode == 'manual':
+        thresh = angle_thresh_deg
+    else:
+        raise ValueError("mode can only be 'otsu' or 'manual'")
+
+    mask = angle_map < thresh  # similar pixels
+
+    if bg_reference:
+        mask = ~mask
+
+    # --- POST PROCESSING ---
+    mask_cln = remove_small_objects(mask, max_size=min_object_size)
+
+    if fill_holes:
+        mask_cln = binary_fill_holes(mask_cln)
+
+    mask_cln = opening(mask_cln, disk(2))
+
+    # --- visualization ---
+    if visualize:
+        fig, ax = plt.subplots(1, 4, figsize=(15, 5))
+
+        ax[0].imshow(cube[:, :, 150], cmap="gray")
+        ax[0].set_title("Input")
+
+        im = ax[1].imshow(angle_map, cmap="inferno")
+        ax[1].set_title(f"SAM angles (Threshold={thresh:.2f}°)")
+        plt.colorbar(im, ax=ax[1])
+
+        ax[2].imshow(mask, cmap="grey")
+        ax[2].set_title("Mask before cleaning")
+
+        ax[3].imshow(mask_cln, cmap="grey")
+        ax[3].set_title("Final Mask")
+        
+        for a in ax:
+            a.axis("off")
+
+        plt.tight_layout()
+        plt.show()
+
+    if mode == 'otsu':
+        return mask_cln, thresh
+    else:
+        return mask
 
 def mask_highpass_otsu(
     cube: NDArray,
