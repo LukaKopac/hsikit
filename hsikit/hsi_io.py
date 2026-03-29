@@ -1,3 +1,11 @@
+"""
+Input/output utilities for hyperspectral imaging (HSI) data.
+
+Handles reading raw files, parsing metadata, and saving processed data.
+
+Note: This module is under active development and may change.
+"""
+
 import numpy as np
 from numpy.typing import NDArray
 import tifffile

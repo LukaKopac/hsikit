@@ -1,3 +1,11 @@
+"""
+Utilities for masking background of hyperspectral data cubes.
+
+This module provides helper functions for producing binary masks using various functionality.
+
+Note: This module is under active development and may change.
+"""
+
 import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt

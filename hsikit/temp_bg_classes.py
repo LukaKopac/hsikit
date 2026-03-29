@@ -1,3 +1,9 @@
+"""
+Pipelines for background removal and sample extraction.
+
+Note: This module is under active development and may change.
+"""
+
 import numpy as np
 
 from pathlib import Path

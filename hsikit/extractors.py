@@ -1,3 +1,11 @@
+"""
+Utilities for extracting spectra from hyperspectral data.
+
+This module provides helper functions for extracting spectra - static grid-based and interactive.
+
+Note: This module is under active development and may change.
+"""
+
 import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt

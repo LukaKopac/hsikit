@@ -1,7 +1,85 @@
+"""
+Utilities for preprocessing hyperspectral data.
+
+This module provides helper functions for normalizing HSI cubes and common preprocessing - SNV, MSC, SG derivatives.
+
+Note: This module is under active development and may change.
+"""
+
 import numpy as np
+from numpy.typing import NDArray
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted, check_array
 from scipy.signal import savgol_filter
+
+# Normalization
+
+def normalize_min_max(
+    cube: NDArray,
+    return_params: bool = False
+) -> NDArray | tuple[NDArray, NDArray, NDArray]:
+    """
+    Min-max normalizes a hypercube.
+
+
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array, expected shape (H, W, B)
+    return_params : bool
+        Whether to return min and max values per band.
+
+    Returns
+    -------
+    NDArray or tuple[NDArray, NDArray, NDArray]
+        If return_params is False, returns normalized cube (H, W, B).
+        If True, returns a tuple:
+            (normalized_cube, min_vals, max_vals),
+            where min_vals and max_vals are NDArray of shape (B,)
+    """
+    h, w, b = cube.shape
+    flat_cube = cube.reshape(-1, b)
+    min_vals = flat_cube.min(axis=0)
+    max_vals = flat_cube.max(axis=0)
+    norm_X = (flat_cube - min_vals) / (max_vals - min_vals + 1e-8)
+    norm_cube = norm_X.reshape(h, w, b)
+
+    if return_params:
+        return norm_cube, min_vals, max_vals
+    else:
+        return norm_cube
+
+def normalize_mean_std(cube: NDArray, return_params: bool = False) -> NDArray | tuple[NDArray, NDArray, NDArray]:
+    """
+    Standardizes a hypercube using mean and std.
+
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array, expected shape (H, W, B)
+    return_params : bool
+        Whether to return mean and std values per band.
+
+    Returns
+    -------
+    NDArray or tuple[NDArray, NDArray, NDArray]
+        If return_params is False, returns standardized cube (H, W, B).
+        If True, returns a tuple:
+            (standardized_cube, mean_vals, std_vals),
+            where mean_vals and std_vals are NDArray of shape (B,).
+    """
+    h, w, b = cube.shape
+    X = cube.reshape(-1, b)
+    mean_vals = X.mean(axis=0)
+    std_vals = X.std(axis=0) + 1e-8
+    norm_X = (X - mean_vals) / std_vals
+    norm_cube = norm_X.reshape(h, w, b)
+    if return_params:
+        return norm_cube, mean_vals, std_vals
+    else:
+        return norm_cube
+
+# Standard preprocessing classes (SNV, MSC, SG derivatives)
 
 class SNV(BaseEstimator, TransformerMixin):
     """

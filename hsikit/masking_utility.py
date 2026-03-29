@@ -1,3 +1,9 @@
+"""
+Various masking utilities supporting binary masks and BG removal classes.
+
+Note: This module is under active development and may change.
+"""
+
 import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt

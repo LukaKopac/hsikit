@@ -1,128 +1,22 @@
+"""
+Utilities for visualizing hyperspectral data.
+
+This module provides helper functions for visualizing images, spectra, histograms, 3D slices and 3D cube.
+
+Note: This module is under active development and may change.
+"""
+
 import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-from sklearn.decomposition import PCA
 import plotly.graph_objects as go
 import plotly.io as pio
 pio.renderers.default = 'notebook'
 
 from typing import Optional, Literal
-
-# Basic utility, processing, scaling, normalization, PCA
-
-def normalize_min_max(
-    cube: NDArray,
-    return_params: bool = False
-) -> NDArray | tuple[NDArray, NDArray, NDArray]:
-    """
-    Min-max normalizes a hypercube.
-
-
-    Parameters
-    ----------
-    cube : NDArray
-        HSI 3D array, expected shape (H, W, B)
-    return_params : bool
-        Whether to return min and max values per band.
-
-    Returns
-    -------
-    NDArray or tuple[NDArray, NDArray, NDArray]
-        If return_params is False, returns normalized cube (H, W, B).
-        If True, returns a tuple:
-            (normalized_cube, min_vals, max_vals),
-            where min_vals and max_vals are NDArray of shape (B,)
-    """
-    h, w, b = cube.shape
-    flat_cube = cube.reshape(-1, b)
-    min_vals = flat_cube.min(axis=0)
-    max_vals = flat_cube.max(axis=0)
-    norm_X = (flat_cube - min_vals) / (max_vals - min_vals + 1e-8)
-    norm_cube = norm_X.reshape(h, w, b)
-
-    if return_params:
-        return norm_cube, min_vals, max_vals
-    else:
-        return norm_cube
-
-def normalize_mean_std(cube: NDArray, return_params: bool = False) -> NDArray | tuple[NDArray, NDArray, NDArray]:
-    """
-    Standardizes a hypercube using mean and std.
-
-    Parameters
-    ----------
-    cube : NDArray
-        HSI 3D array, expected shape (H, W, B)
-    return_params : bool
-        Whether to return mean and std values per band.
-
-    Returns
-    -------
-    NDArray or tuple[NDArray, NDArray, NDArray]
-        If return_params is False, returns standardized cube (H, W, B).
-        If True, returns a tuple:
-            (standardized_cube, mean_vals, std_vals),
-            where mean_vals and std_vals are NDArray of shape (B,).
-    """
-    h, w, b = cube.shape
-    X = cube.reshape(-1, b)
-    mean_vals = X.mean(axis=0)
-    std_vals = X.std(axis=0) + 1e-8
-    norm_X = (X - mean_vals) / std_vals
-    norm_cube = norm_X.reshape(h, w, b)
-    if return_params:
-        return norm_cube, mean_vals, std_vals
-    else:
-        return norm_cube
-
-def apply_pca(
-    cube: NDArray,
-    n_components: int = 3,
-    mask: Optional[NDArray] = None,
-    return_model: bool = False
-) -> NDArray | tuple[NDArray, PCA]:
-    """
-    Applies PCA on a hypercube.
-
-    Parameters
-    ----------
-    cube : NDArray
-        HSI 3D array, expected shape (H, W, B).
-    n_components : int
-        Number of PCA components to retain.
-    mask : NDArray | None
-        Optional boolean mask of shape (H, W) to select pixels for PCA.
-    return_model : bool
-        Whether to return the fitted PCA object.
-
-    Returns
-    -------
-    NDArray or tuple[NDArray, object]
-        If return_model is False, returns PCA-transformed cube of shape (H, W, n_components)
-        If True, returns a tuple (pca_cube, pca), containing the transformed cube and fitted PCA object.
-    """
-    h, w, b = cube.shape
-    flat_cube = cube.reshape(-1, b)
-
-    if mask is not None:
-        mask_flat = mask.flatten()
-        X_masked = flat_cube[mask_flat]
-        pca = PCA(n_components=n_components)
-        X_pca_masked = pca.fit_transform(X_masked)
-        flat_pca = np.full((h * w, n_components), np.nan)
-        flat_pca[mask_flat] = X_pca_masked
-    else:
-        pca = PCA(n_components=n_components)
-        flat_pca = pca.fit_transform(flat_cube)
-        
-    pca_cube = flat_pca.reshape(h, w, n_components)
-    
-    if return_model:
-        return pca_cube, pca
-    return pca_cube
 
 # Plotting and visualization
 
