@@ -10,7 +10,7 @@ authors = [
     { name = "Luka Kopač", email = "luka.kopac@bf.uni-lj.si" }
 ]
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.8"
 dependencies = [
     "numpy>=2.2",

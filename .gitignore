@@ -9,9 +9,3 @@ __pycache__/
 hsikit.egg-info/
 dist/
 build/
-
-# Virtual environment
-hsikit_venv/
-
-# Test file
-hsikit/test_development.ipynb
