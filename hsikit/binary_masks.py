@@ -217,7 +217,7 @@ def mask_top_contrast(
 def mask_top_contrastV2(
     cube: NDArray,
     top_n: int = 5,
-    cont_boost: tuple[int, int] = (0.3, 0.7),
+    cont_boost: tuple[float, float] = (0.3, 0.7),
     shadow_quantile: float = 0.1,
     crop: tuple[int, int] = (0, 0),
     min_size: int = 500,
@@ -324,7 +324,7 @@ def mask_top_contrastV2(
 def mask_SAM(
     cube: NDArray,
     ref_spectrum: NDArray,
-    mode: str = 'otsu',
+    mode: Literal['otsu', 'manual'] = 'otsu',
     angle_thresh_deg: float = 10,
     bg_reference: bool = True,
     min_object_size: int = 500,
@@ -340,11 +340,11 @@ def mask_SAM(
         HSI 3D array, expected shape (H, W, B)
     ref_spectrum : NDArray
         Reference array, expected shape (B,)
-    mode : string
+    mode : Literal['otsu', 'manual']
         Threshold set mode - either 'otsu' or 'manual'
     angle_thresh_deg : float
         Angle threshold if mode='manual'
-    bg_reference : NDArray
+    bg_reference : bool
         If the reference array belongs to background (inverts the mask)
     min_object_size : int
         Remove connected components smaller than this.
@@ -689,6 +689,9 @@ def mask_from_pca(
     binary_mask = binary_opening(binary_mask, structure=structure)
     binary_mask = binary_closing(binary_mask, structure=structure)
     binary_mask = binary_fill_holes(binary_mask)
+    if binary_mask is None:
+        raise RuntimeError("binary_fill_holes returned None unexpectedly")
+    binary_mask = np.asarray(binary_mask)
 
     # Shadow mask
     mean_reflectance = cube.mean(axis=2)

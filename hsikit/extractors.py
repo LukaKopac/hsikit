@@ -10,6 +10,8 @@ import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
+from matplotlib.backend_bases import MouseButton
+from matplotlib.patches import Rectangle
 from matplotlib.path import Path
 from matplotlib.axes import Axes
 
@@ -88,11 +90,13 @@ def Grid_ROI_extractor(
     # --- visualization setup ---
     if visualize:
         if ax is None:
-            fig, ax = plt.subplots(figsize=(6, 6))
+            fig, _ax = plt.subplots(figsize=(6, 6))
+        else:
+            _ax = ax
 
         img = cube.mean(axis=2) if band_for_display is None else cube[:, :, band_for_display]
-        ax.imshow(img, cmap="gray")
-        ax.axis("off")
+        _ax.imshow(img, cmap="gray")
+        _ax.axis("off")
 
     # --- main loop ---
     for j in range(n_cols):
@@ -109,10 +113,10 @@ def Grid_ROI_extractor(
             spectrum = stat_func(roi, axis=(0, 1))
 
             spectra.append(spectrum)
-            roi_coords.append((c0, r0, c1, r1))  # unified format
+            roi_coords.append((c0, r0, c1, r1))
 
             if visualize:
-                rect = plt.Rectangle(
+                rect = Rectangle(
                     (c0, r0),
                     roi_w,
                     roi_h,
@@ -120,7 +124,7 @@ def Grid_ROI_extractor(
                     edgecolor="red",
                     facecolor="none",
                 )
-                ax.add_patch(rect)
+                _ax.add_patch(rect)
 
     return np.array(spectra), roi_coords
 
@@ -206,7 +210,7 @@ class ROIExtractor:
             self.ax,
             self._onselect_rectangle,
             useblit=False,
-            button=[1],
+            button=[MouseButton.LEFT],
             minspanx=self.min_span,
             minspany=self.min_span,
             spancoords='data'
@@ -240,7 +244,7 @@ class ROIExtractor:
         self.spectra.append(spectrum)
         self.rois.append((x0, y0, x1, y1))
 
-        rect = plt.Rectangle((x0, y0), x1 - x0, y1 - y0,
+        rect = Rectangle((x0, y0), x1 - x0, y1 - y0,
                              fill=False, edgecolor='red', linewidth=1.5)
         self.ax.add_patch(rect)
 

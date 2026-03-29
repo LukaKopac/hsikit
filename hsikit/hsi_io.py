@@ -228,9 +228,11 @@ def load_hsi_batch(root_folder: str,
         
         if return_metadata:
             cube, meta = load_hsi_raw(base, return_metadata=True)
+            assert metadata_dict is not None
             metadata_dict[filename] = meta
         else:
             cube = load_hsi_raw(base, return_metadata=False)
+            assert isinstance(cube, np.ndarray)
 
         cubes.append(cube)
         print(f"Loaded {filename} {cube.shape}")

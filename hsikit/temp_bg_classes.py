@@ -63,6 +63,7 @@ class HSIImporter:
                 self.metadata[scene_name] = meta
             else:
                 cube = load_hsi_raw(base, return_metadata=False)
+                assert isinstance(cube, np.ndarray)
                 meta = {}
 
             self.cubes[scene_name] = cube
