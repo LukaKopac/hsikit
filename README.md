@@ -4,27 +4,31 @@ This repository contains a collection of Python functions and classes developed 
 
 The code reflects an **internal research toolbox**, built iteratively during multiple experiments.
 
+⚠️ This package is under active development and its API is not yet stable (versioning is applied only to larger structural changes).
+
 ---
 
 ## Package structure
+
+Main functionality lives in `hsikit/`, with utilities split by responsibility.
+
 ```text
 project-root/
 ├── hsikit/
-│   ├── __init__.py
-│   ├── base_utils.py
-│   ├── binary_masks.py
-│   ├── extractors.py
-│   ├── hsi_io.py
-│   ├── masking_utility.py
-│   ├── preprocessing.py
-│   └── temp_bg_classes.py
+│   ├── __init__.py         # Package initialization
+│   ├── base_utils.py       # Data normalization and visualization
+│   ├── binary_masks.py     # Binary mask functions for background removal
+│   ├── extractors.py       # Extract spectra from HSI cubes
+│   ├── hsi_io.py           # Load data
+│   ├── masking_utility.py  # Masking related helper functions
+│   ├── preprocessing.py    # Data preprocessing
+│   └── temp_bg_classes.py  # ⭐ Main bg removal and sample extraction pipeline
 │
-├── CHANGELOG.md
-├── LICENSE
-├── README.md
-├── TODO.md
-├── pyproject.toml
-└── requirements.txt
+├── CHANGELOG.md            # Version history (not updated regularly)
+├── LICENSE                 # License info
+├── README.md               # Project documentation
+├── TODO.md                 # Planned improvements / tasks
+└── pyproject.toml          # Build + dependency configuration
 ```
 
 ---
@@ -47,7 +51,7 @@ The utilities in this repository include functionality such as:
 - Data visualization (hypercube, spectra, histograms)
 - Basic preprocessing and normalization routines
 - Masking and background removal
-- Utilities for working with pixel-level hyperspectral data in Python/NumPy workflows
+- Utilities for working with hyperspectral data in Python/NumPy workflows
 
 ---
 
@@ -56,7 +60,6 @@ The utilities in this repository include functionality such as:
 - Compatibility with non-ClydeHSI systems
 - A stable or well-defined public API
 - Optimized performance
-- Comprehensive documentation or test coverage
 - Backward compatibility between versions
 
 The code is provided **as-is**, primarily for research use and reference.
