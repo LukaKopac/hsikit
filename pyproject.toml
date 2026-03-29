@@ -13,13 +13,13 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.8"
 dependencies = [
-    "numpy",
-    "matplotlib",
-    "scikit-learn",
-    "scikit-image",
-    "scipy",
-    "plotly",
-    "tifffile"
+    "numpy>=2.2",
+    "matplotlib>=3.10",
+    "scikit-learn>=1.6",
+    "scikit-image>=0.26",
+    "scipy>=1.15",
+    "plotly>=6.1",
+    "tifffile>=2025.1"
 ]
 
 [project.urls]
