@@ -258,7 +258,7 @@ def plot_spectral_hist(
     
     ax.hist(values, bins=bins, color='gray', alpha=0.8, edgecolor='black', label=label)
     if log_scale:
-        ax.yscale('log')
+        ax.set_yscale('log')
 
     ax.set_xlabel('Intensity / Reflectance')
     ax.set_ylabel('Pixel Count')

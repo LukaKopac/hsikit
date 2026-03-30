@@ -10,11 +10,12 @@ Tasks related to new content and functionality.
 - [ ] Add use of other automatic masking options  
 - [ ] Add the option to not use mapping file/different kind of mapping file/list of labels  
 
-### Related to *masking_utility.py*
+### Related to *binary_masks.py*
+- [ ] **Add shadow percentile option to SAM mask**
 - [ ] **Add manual interactive masking options (pixel/wider pixel area eg. 5x5, rectangle, polygon)**  
 
 ### Other
-- [ ] **Outlier and dead pixel detection/removal ({base_utils})**  
+- [ ] **Outlier and dead pixel detection/removal (*base_utils.py*)**  
 - [ ] Add cube subsampling options such as 5x5 or 10x10 pixel mean/median aggregation  
 - [ ] Convert dictionary of cubes to X (n_samples, n_features) and y (n_samples) matrices (keep track of individual samples)  
 
