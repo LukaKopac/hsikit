@@ -171,7 +171,7 @@ def rect_mask(
     ----------
     binary_mask : NDArray
         Base binary mask, expected shape (H, W)
-    rect_dims : int
+    rect_dims : tuple[int, int]
         Height and width of rectangles.
     true_threshold : float
         Threshold for ratio between True and False pixels.
@@ -191,7 +191,7 @@ def rect_mask(
     binary_mask_closed = binary_closing(binary_mask, structure=structure)
 
     rect_mask = np.zeros_like(binary_mask, dtype=bool)
-    labeled_mask, num_features = label(binary_mask_closed)
+    labeled_mask = label(binary_mask_closed)
     rect_height, rect_width = rect_dims
 
     regions = find_objects(labeled_mask) # returns list[tuple[slice, slice]]

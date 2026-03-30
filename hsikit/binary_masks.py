@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from sklearn.cluster import KMeans
 from skimage.filters import threshold_otsu
-from skimage.morphology import remove_small_holes, remove_small_objects, opening, disk
+from skimage.morphology import remove_small_holes, remove_small_objects, disk
 from skimage.measure import shannon_entropy, label, regionprops
 from scipy.ndimage import gaussian_filter, generate_binary_structure, binary_closing, binary_opening, binary_fill_holes
 
-from typing import Optional, Literal
+from typing import Optional, Literal, Any
 
 from hsikit.masking_utility import otsu_separation_score
 
@@ -326,9 +326,10 @@ def mask_SAM(
     ref_spectrum: NDArray,
     mode: Literal['otsu', 'manual'] = 'otsu',
     angle_thresh_deg: float = 10,
+    shadow_quantile: Optional[float] = None,
     bg_reference: bool = True,
-    min_object_size: int = 500,
-    fill_holes: bool = True,
+    post_process: bool = True,
+    post_params: Optional[dict[str, Any]] = None,
     visualize: bool = False,
 ) -> NDArray | tuple[NDArray, float]:
     """
@@ -344,30 +345,55 @@ def mask_SAM(
         Threshold set mode - either 'otsu' or 'manual'
     angle_thresh_deg : float
         Angle threshold if mode='manual'
+    shadow_quantile : Optional[float]
+        Quantile threshold for removing shadow/low-intensity pixels
+        Pixels below this intensity quantile are excluded from mask
     bg_reference : bool
         If the reference array belongs to background (inverts the mask)
-    min_object_size : int
-        Remove connected components smaller than this.
-    fill_holes : bool
-        Fill internal holes inside foreground objects.
+    post_process : bool
+        If post processing is applied to the mask
+    post_params : Optional[dict]
+        Parameters for post processing functions:
+        - min_object_size : int (min object size to keep, def 500)
+        - fill_holes : bool (whether to fill internal holes, def True)
+        - radius : int (radius for morphological opening/closing, def 2)
+        - smooth_sigma : float (sigma for optional Gaussian smoothing, def None)
     visualize : bool
         If True, plots input image, SAM angle image, mask before cleaning and final mask
 
     Returns
     -------
-    mask : NDArray
-        2D mask of shape (H, W) foreground=True, dtype=bool
-    threshold : float
-        Threshold value (returns only if mode='otsu')
+    mask_cln : NDArray
+        2D cleaned mask of shape (H, W), dtype=bool
+    threshold : float, optional
+        Threshold value used (returned if mode='otsu')
     """
     
+    if post_params is None:
+        post_params = {}
+
+    min_object_size = post_params.get("min_object_size", 500)
+    fill_holes = post_params.get("fill_holes", True)
+    radius = post_params.get("radius", 2)
+    smooth_sigma = post_params.get("smooth_sigma", None)
+
     H, W, B = cube.shape
 
     # --- reshape ---
     pixels = cube.reshape(-1, B)
 
-    # --- valid pixels (important!) ---
+    # --- valid pixels ---
     pixel_norms = np.linalg.norm(pixels, axis=1)
+
+    shadow_mask = None
+    if shadow_quantile is not None:
+        intensity = pixel_norms.reshape(H, W)
+
+        # normalize
+        intensity_norm = (intensity - intensity.min()) / (intensity.max() - intensity.min() + 1e-8)
+        p_low = np.quantile(intensity_norm, shadow_quantile)
+        shadow_mask = (intensity_norm > p_low) & (intensity > 1e-6) # keep only bright pixels
+
     valid_mask = pixel_norms > 1e-6
 
     pixels_norm = np.zeros_like(pixels)
@@ -387,7 +413,7 @@ def mask_SAM(
     angle_map = angles_deg.reshape(H, W)
 
     # --- OTSU THRESHOLD ---
-    valid_angles = angle_map[~np.isnan(angle_map)]
+    valid_angles = angle_map[valid_mask.reshape(H, W)]
     
     if mode == 'otsu':
         thresh = threshold_otsu(valid_angles)
@@ -401,13 +427,21 @@ def mask_SAM(
     if bg_reference:
         mask = ~mask
 
+    if shadow_mask is not None:
+        mask = mask & shadow_mask
+
     # --- POST PROCESSING ---
-    mask_cln = remove_small_objects(mask, max_size=min_object_size)
-
-    if fill_holes:
-        mask_cln = binary_fill_holes(mask_cln)
-
-    mask_cln = opening(mask_cln, disk(2))
+    if post_process:
+        mask_cln = remove_small_objects(mask, max_size=min_object_size)
+        if fill_holes:
+            mask_cln = binary_fill_holes(mask_cln)
+        mask_cln = binary_opening(mask_cln, structure=disk(radius))
+        mask_cln = binary_closing(mask_cln, structure=disk(radius))
+        if smooth_sigma is not None:
+            smooth = gaussian_filter(mask_cln.astype(float), sigma=smooth_sigma)
+            mask_cln = smooth > 0.5
+    else:
+        mask_cln = mask
 
     # --- visualization ---
     if visualize:
@@ -435,7 +469,7 @@ def mask_SAM(
     if mode == 'otsu':
         return mask_cln, thresh
     else:
-        return mask
+        return mask_cln
 
 def mask_highpass_otsu(
     cube: NDArray,
