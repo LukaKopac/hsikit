@@ -15,7 +15,7 @@ Main functionality lives in `hsikit/`, with utilities split by responsibility.
 ```text
 project-root/
 ├── hsikit/
-│   ├── __init__.py         # Package initialization
+│   ├── __init__.py
 │   ├── visualizations.py   # HSI visualization
 │   ├── binary_masks.py     # Binary mask functions for background removal
 │   ├── extractors.py       # Extract spectra from HSI cubes
@@ -25,11 +25,11 @@ project-root/
 │   ├── temp_bg_classes.py  # ⭐ Main bg removal and sample extraction pipeline
 │   └── sandbox.py          # Unorganized, non-reviewed colection of utility from various experiments
 │
-├── CHANGELOG.md            # Version history (not updated regularly)
-├── LICENSE                 # License info
-├── README.md               # Project documentation
-├── TODO.md                 # Planned improvements / tasks
-└── pyproject.toml          # Build + dependency configuration
+├── CHANGELOG.md
+├── LICENSE
+├── README.md
+├── TODO.md
+└── pyproject.toml
 ```
 
 ---
