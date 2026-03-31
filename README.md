@@ -4,13 +4,13 @@ This repository contains a collection of Python functions and classes developed 
 
 The code reflects an **internal research toolbox**, built iteratively during multiple experiments.
 
-⚠️ This package is under active development and its API is not yet stable (versioning is applied only to larger structural changes).
+⚠️ This package is under active development and its API is not stable (versioning is applied only to larger structural changes).
 
 ---
 
 ## Package structure
 
-Main functionality lives in `hsikit/`, with utilities split by responsibility.
+Main functionality lives in `hsikit/`, with modules split by responsibility.
 
 ```text
 project-root/
@@ -52,15 +52,18 @@ The utilities in this repository include functionality such as:
 - Data visualization (hypercube, spectra, histograms)
 - Basic preprocessing and normalization routines
 - Masking and background removal
-- Utilities for working with hyperspectral data in Python/NumPy workflows
+- Other utilities for working with hyperspectral data
 
 ---
 
 ## What this code does *not* guarantee
 
-- Compatibility with non-ClydeHSI systems
+- Compatibility with other HSI systems
 - A stable or well-defined public API
 - Optimized performance
 - Backward compatibility between versions
 
+Disclaimer:  
+AI tools were used to assist in the development of portions of this codebase.  
+All generated content has been reviewed, tested, and validated to ensure correctness and functionality.  
 The code is provided **as-is**, primarily for research use and reference.
