@@ -16,13 +16,14 @@ Main functionality lives in `hsikit/`, with utilities split by responsibility.
 project-root/
 ├── hsikit/
 │   ├── __init__.py         # Package initialization
-│   ├── base_utils.py       # Data normalization and visualization
+│   ├── visualizations.py   # HSI visualization
 │   ├── binary_masks.py     # Binary mask functions for background removal
 │   ├── extractors.py       # Extract spectra from HSI cubes
 │   ├── hsi_io.py           # Load data
 │   ├── masking_utility.py  # Masking related helper functions
-│   ├── preprocessing.py    # Data preprocessing
-│   └── temp_bg_classes.py  # ⭐ Main bg removal and sample extraction pipeline
+│   ├── preprocessing.py    # Data normalization and preprocessing
+│   ├── temp_bg_classes.py  # ⭐ Main bg removal and sample extraction pipeline
+│   └── sandbox.py          # Unorganized, non-reviewed colection of utility from various experiments
 │
 ├── CHANGELOG.md            # Version history (not updated regularly)
 ├── LICENSE                 # License info
