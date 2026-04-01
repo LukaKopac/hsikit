@@ -4,7 +4,8 @@ This repository contains a collection of Python functions and classes developed 
 
 The code reflects an **internal research toolbox**, built iteratively during multiple experiments.
 
-⚠️ This package is under active development and its API is not stable (versioning is applied only to larger structural changes).
+⚠️ This package is under active development and its API is not stable  
+    (versioning is applied only to larger structural changes).
 
 ---
 
@@ -16,13 +17,14 @@ Main functionality lives in `hsikit/`, with modules split by responsibility.
 project-root/
 ├── hsikit/
 │   ├── __init__.py
-│   ├── visualizations.py   # HSI visualization
-│   ├── binary_masks.py     # Binary mask functions for background removal
-│   ├── extractors.py       # Extract spectra from HSI cubes
-│   ├── hsi_io.py           # Load data
+│   ├── hsi_io.py           # ⭐ Load data
+│   ├── visualizations.py   # ⭐ HSI visualization
+│   ├── cleaning.py         # ⭐ Clean data, remove dead pixels/extreme outliers
 │   ├── masking_utility.py  # Masking related helper functions
-│   ├── preprocessing.py    # Data normalization and preprocessing
+│   ├── binary_masks.py     # Binary mask functions for background removal
 │   ├── temp_bg_classes.py  # ⭐ Main bg removal and sample extraction pipeline
+│   ├── extractors.py       # ⭐ Extract spectra from HSI cubes
+│   ├── preprocessing.py    # ⭐ Data normalization and preprocessing
 │   └── sandbox.py          # Unorganized, non-reviewed colection of utility from various experiments
 │
 ├── CHANGELOG.md
