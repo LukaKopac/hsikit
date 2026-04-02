@@ -275,7 +275,6 @@ class HSIProcessorV2:
 
     - Batch loading of raw hyperspectral cubes and metadata.
     - Parsing a scene-to-species mapping file (abbreviation expansion + scene blocks).
-    - Conversion of raw radiance cubes to reflectance.
     - Automatic mask generation using a top-contrast heuristic.
     - Placement of fixed rectangular masks for sampling (column-wise layout).
     - Extraction of per-species sample cubes based on scene mapping.
@@ -306,8 +305,6 @@ class HSIProcessorV2:
         Metadata objects returned by the importer for each cube.
     wl : np.ndarray
         Wavelengths shared across all imported cubes.
-    reflectance : list of np.ndarray
-        Reflectance-converted hyperspectral cubes (same ordering as `cubes`).
     masks : list of np.ndarray
         Binary foreground masks computed per cube.
     rect_masks : list of list of np.ndarray
@@ -364,7 +361,6 @@ class HSIProcessorV2:
         self.cube_names = []
         self.meta = [] # metadata per cube
         self.wl = None # wavelengths (shared)
-        self.reflectance = [] # list of reflectance cubes
         self.masks = [] # list of per cube masks
         self.rect_masks = [] # list of fixed rect masks (list of lists)
         self.coords = [] # coordinates from rect masks
@@ -379,19 +375,33 @@ class HSIProcessorV2:
         self.mapping = {}
         self.samples_dict = {}
 
-    def load(self, suffix='refl'):
-        self.cubes, self.meta, self.wl, self.cube_names = load_hsi_batch(
+    def _load(self, suffix='refl'):
+        """
+        Loads HSI data using load_hsi_batch function, which returns wavelengths, metadata and file names.
+
+        Parameters
+        ----------
+        suffix : str
+            Suffix for file filtering (default='refl')
+        """
+        data = load_hsi_batch(
             root_folder=self.folder,
             suffix=suffix,
             return_wavelengths=True,
             return_metadata=True,
             return_names=True
         )
+
+        self.cubes = data["cubes"]
+        self.meta = data["metadata"]
+        self.wl = data["wavelengths"]
+        self.cube_names = data["names"]
+
         assert len(self.cubes) == len(self.cube_names)
         
         return self
 
-    def load_mapping(self):
+    def _load_mapping(self):
         with open(self.mapping_file, 'r') as f:
             lines = [line.strip() for line in f if line.strip()]
 
@@ -412,27 +422,27 @@ class HSIProcessorV2:
 
         return self
 
-    def compute_masks(self, min_size=1800, ycrop=0, xcrop=0, manual_max_band=None, visualize=False):
+    def _compute_masks(self, min_size=1800, crop=(0,0), manual_max_band=None, visualize=False):
         self.masks = [
-            mask_top_contrastV2(c, min_size=min_size, ycrop=ycrop, xcrop=xcrop, manual_max_band=manual_max_band, visualize=visualize, cube_name=name)
-            for c, name in zip(self.reflectance, self.cube_names)
+            mask_top_contrastV2(c, min_size=min_size, crop=crop, manual_max_band=manual_max_band, visualize=visualize, title=name)
+            for c, name in zip(self.cubes, self.cube_names)
         ]
         return self
 
-    def add_rectangles(self, width=50, height=90, min_frac=0.9):
+    def _add_rectangles(self, width=50, height=90, min_frac=0.9, visualize=False):
         self.rect_masks = []
         self.coords = []
         for mask in self.masks:
-            rects, coords = fixed_rect_extraction(mask, (width, height), mode='column', min_frac=min_frac)
+            rects, coords = fixed_rect_extraction(mask, (width, height), mode='column', min_frac=min_frac, visualize=visualize)
             self.rect_masks.append(rects)
             self.coords.append(coords)
         return self
 
-    def extract_samples(self):
+    def _extract_samples(self):
         self.samples_dict = {}
 
-        for cube, rects, scene_id in zip(self.reflectance, self.rect_masks, self.cube_names):
-            species_list = self.mapping[scene_id]
+        for cube, rects, scene_id in zip(self.cubes, self.rect_masks, self.cube_names):
+            species_list = self.mapping[scene_id[:-5]]
 
             samples = extract_sample_cubes_from_masks(cube, rects, species_list=species_list)
 
@@ -440,6 +450,23 @@ class HSIProcessorV2:
                 self.samples_dict.setdefault(specie, []).extend(cubes_list)
 
         return self
+    
+    def run(self,
+            min_size=1800,
+            crop=(0,0),
+            manual_max_band=None,
+            width=50,
+            height=90,
+            min_frac=0.9,
+            visualize=False
+        ):
+        self._load()
+        self._load_mapping()
+        self._compute_masks(min_size, crop, manual_max_band, visualize=visualize)
+        self._add_rectangles(width, height, min_frac, visualize=visualize)
+        self._extract_samples()
+        return self
+
 
     def summary(self, print_shapes=False):
         print("=== HSI Processor Summary ===")
@@ -450,7 +477,7 @@ class HSIProcessorV2:
         print("=============================")
         print("\nSamples per species:")
         for species, cubes in self.samples_dict.items():
-            line = f"  {species}: {len(cubes)} samples"
+            line = f"  {species}: {len(cubes)} sample(s)"
             if print_shapes and cubes:
                 unique_shapes = {c.shape for c in cubes}
                 line += f", shapes: {unique_shapes}"

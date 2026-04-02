@@ -592,6 +592,9 @@ def rmse_cv(X, y, n_components=10, n_splits=5):
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     rmses = []
 
+    def mean_squared_error():
+        pass
+
     for train, test in kf.split(X):
         pls = PLSRegression(n_components=n_components)
         pls.fit(X[train], y[train])
