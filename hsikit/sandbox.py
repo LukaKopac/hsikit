@@ -295,7 +295,7 @@ def block_average_cube(cube, block_size=5):
 
     H_crop = H - (H % block_size)
     W_crop = W - (W % block_size)
-    cube_cropped = cube[:H_crop, :W_crop, B]
+    cube_cropped = cube[:H_crop, :W_crop, :]
 
     h_blocks = H_crop // block_size
     w_blocks = W_crop // block_size
