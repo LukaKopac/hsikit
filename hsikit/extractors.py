@@ -17,6 +17,74 @@ from matplotlib.axes import Axes
 
 from typing import Optional, Literal
 
+# ---------- Extract mean spectra per ROI at manually specified locations -----------
+def extract_local_mean(
+        cube: NDArray,
+        coords: list[tuple[int, int]],
+        size: int = 5,
+        shape: Literal["square", "disk"] = "square"
+    ) -> NDArray:
+    """
+    Extracts mean spectra per ROI at manually specified locations.
+    
+    Parameters
+    ----------
+    cube : NDArray
+        HSI 3D array, expected shape(H, W, B)
+    coords : list[tuple[int, int]]
+        List of (row, col) tuples
+    size : int
+        Size of ROI window over which to compute mean
+        - square → window size (odd int, e.g. 5)
+        - disk   → radius (int)
+    shape : Literal["square", "disk"]
+        ROI shape
+
+    Returns
+    -------
+    NDArray
+        Extracted spectra as an X matrix (n_samples, B)
+    """
+    H, W, L = cube.shape
+    spectra = []
+
+    if shape == "square":
+        if size % 2 == 0:
+            raise ValueError("Square size must be odd")
+        k = size // 2
+
+    elif shape == "disk":
+        radius = size
+        y, x = np.ogrid[-radius:radius+1, -radius:radius+1]
+        disk_mask = x**2 + y**2 <= radius**2
+
+    else:
+        raise ValueError("shape must be 'square' or 'disk'")
+
+    for r, c in coords:
+
+        if shape == "square":
+            r0, r1 = max(0, r - k), min(H, r + k + 1)
+            c0, c1 = max(0, c - k), min(W, c + k + 1)
+
+            patch = cube[r0:r1, c0:c1, :]
+            patch = patch.reshape(-1, L)
+
+        else:  # disk
+            r0, r1 = max(0, r - radius), min(H, r + radius + 1)
+            c0, c1 = max(0, c - radius), min(W, c + radius + 1)
+
+            patch = cube[r0:r1, c0:c1, :]
+
+            # adjust mask to match cropped patch
+            mask = disk_mask[:patch.shape[0], :patch.shape[1]]
+
+            patch = patch[mask]
+
+        spectra.append(np.nanmean(patch, axis=0))
+
+    return np.array(spectra)
+
 
 # ---------- Extract median/mean spectra per rectangle grid-based ROIs --------------
 def Grid_ROI_extractor(

@@ -654,24 +654,17 @@ def CARS(X, y, n_components=10, n_mc=50, sample_ratio=0.9, cv_splits=5, random_s
 
 # ----------------------------------------------------------------- PREPROCESSING -----------------------------------------------
 
-def robust_snv(cube):
-    median = np.nanmedian(cube, axis=0)
-    iqr = np.nanpercentile(cube, 75, axis=0) - np.nanpercentile(cube, 25, axis=0)
-    iqr[iqr == 0] = 1 # Avoid division by zero if IQR is 0
-    normalized_cube = (cube - median) / iqr
-    return normalized_cube
+def robust_snv(X):
+    median = np.nanmedian(X, axis=1, keepdims=True)
+    iqr = np.nanpercentile(X, 75, axis=1, keepdims=True) - np.nanpercentile(X, 25, axis=1, keepdims=True)
+    iqr[iqr == 0] = 1e-6 # Avoid division by zero
+    return (X - median) / iqr
 
-def rnv(cube):
-    H, W, B = cube.shape
-    pixels = cube.reshape(-1, B)
-
-    medians = np.median(pixels, axis=1, keepdims=True)
-    mad = np.median(np.abs(pixels - medians), axis=1, keepdims=True)
-
+def rnv(X):
+    medians = np.median(X, axis=1, keepdims=True)
+    mad = np.median(np.abs(X - medians), axis=1, keepdims=True)
     mad[mad == 0] = 1e-6
-
-    normalized = (pixels - medians) / mad
-    return normalized.reshape(H, W, B)
+    return (X - medians) / mad
 
 
 # ----------------------------------------------------------------- PLS-DA -----------------------------------------------
