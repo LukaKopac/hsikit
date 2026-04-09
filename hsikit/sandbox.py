@@ -23,11 +23,7 @@ Good ideas to implement:
 
 - Robust SNV
 
-- Subsampling/block-average 5x5, 10x10...
-
 - Visualizations using actual wavelengths instead of bands
-
-- Class variance ratio - between classes vs within classes
 
 - PLS-DA, soft PLS-DA
 
@@ -37,13 +33,6 @@ Good ideas to implement:
 
 - Global normalization for visualization (image plotting) functions
 ...
-
-TODO
-----
-- deduplicate - keep latest versions
-- unify cube shape convention (H, W, B)
-- Undefined dependencies
-- ...
 
 """
 
@@ -58,288 +47,22 @@ from scipy.stats import chi2
 from scipy import sparse
 
 # ----------------------------------------------------------------- CLEANING / EXPLORATORY -----------------------------------------------
-def detect_line_defects(cube, z_thresh=5.0, min_fraction=0.9):
-    """
-    Detect (col, band) defects where most rows at that (col,band) are extreme outliers.
-    Returns a boolean array defect_mask of shape (rows, cols, bands) and a summary list of (col,band).
-    
-    Strategy:
-      - For each band, compute the column-wise values averaged over rows (or L2 across rows).
-      - Compute a z-score across columns for that band; columns with high z indicate anomaly.
-      - Verify that the anomaly affects >= min_fraction of rows at that (col,band) by checking
-        per-row deviation at that (col,band).
-    
-    Parameters:
-      cube : ndarray (r,c,b)
-      z_thresh : float, z-score threshold for column anomaly at each band
-      min_fraction : float in (0,1], fraction of rows that must be outliers to call it a line defect
-    
-    Returns:
-      defect_mask : bool ndarray (r,c,b) True where pixel considered defective
-      defects_list : list of tuples (col, band)
-    """
-    r, c, b = cube.shape
-    defect_mask = np.zeros_like(cube, dtype=bool)
-    defects_list = []
-    
-    # operate band-by-band
-    for bi in range(b):
-        band = cube[:, :, bi].astype(float)  # shape (r, c)
-        # column summary: median across rows (robust) or mean
-        col_med = np.median(band, axis=0)   # shape (c,)
-        # robust z via median absolute deviation (less sensitive to extremes)
-        med = np.median(col_med)
-        mad = np.median(np.abs(col_med - med)) + 1e-9
-        zcols = (col_med - med) / (1.4826 * mad)  # approximate z using MAD
-        
-        # candidate columns for this band
-        cand_cols = np.where(np.abs(zcols) > z_thresh)[0]
-        if cand_cols.size == 0:
-            continue
-        
-        # verify that most rows in that (col,bi) are extreme relative to that row's distribution
-        # compute per-row z using row stats across columns
-        row_med = np.median(band, axis=1)        # (r,)
-        row_mad = np.median(np.abs(band - row_med[:, None]), axis=1) + 1e-9  # (r,)
-        # z for each (row,col)
-        z_rows_cols = (band - row_med[:, None]) / (1.4826 * row_mad[:, None])
-        
-        for col in cand_cols:
-            # fraction of rows exceeding threshold at this (row,col)
-            frac = np.mean(np.abs(z_rows_cols[:, col]) > z_thresh)
-            if frac >= min_fraction:
-                defect_mask[:, col, bi] = True
-                defects_list.append((int(col), int(bi)))
-    return defect_mask, defects_list
-
-
-def repair_line_defect_spatial(cube, defect_mask, cols_bands=None):
-    """
-    Repair detected (col,band) defects by replacing each defective (col,band) with the
-    median of its spatial neighbors for the same band (left & right columns).
-    
-    If neighbors are also defective, expands to 2-column radius median.
-    
-    Parameters:
-      cube : ndarray (r,c,b)
-      defect_mask : bool ndarray (r,c,b) marking defective pixels to repair
-      cols_bands : optional list of (col,band) tuples to process (if None, derive from mask)
-    
-    Returns:
-      cube_fixed : ndarray same shape as cube
-      repaired_mask : bool ndarray marking pixels actually replaced
-    """
-    r, c, b = cube.shape
-    cube_fixed = cube.copy().astype(float)
-    repaired_mask = np.zeros_like(defect_mask, dtype=bool)
-    
-    if cols_bands is None:
-        # find unique (col,band) from mask
-        idx = np.where(np.any(defect_mask, axis=0))  # gives (cols, bands) grid boolean
-        # simpler: iterate through columns and bands where any row True
-        cols, bands = np.where(np.any(defect_mask, axis=0))
-        cols_bands = list(zip(cols.tolist(), bands.tolist()))
-    
-    for col, bi in cols_bands:
-        # determine neighbor columns to use
-        left = col - 1 if col - 1 >= 0 else None
-        right = col + 1 if col + 1 < c else None
-        neighbor_vals = []
-        if left is not None:
-            neighbor_vals.append(cube[:, left, bi])
-        if right is not None:
-            neighbor_vals.append(cube[:, right, bi])
-        if len(neighbor_vals) == 0:
-            continue  # nothing to do (single-column image)
-        neighbor_stack = np.stack(neighbor_vals, axis=0)  # (n_neighbors, r)
-        # if neighbors include NaNs or other defects, take median across available neighbors
-        rep = np.median(neighbor_stack, axis=0)  # shape (r,)
-        # apply replacement only at rows marked defective
-        rows_to_replace = defect_mask[:, col, bi]
-        cube_fixed[rows_to_replace, col, bi] = rep[rows_to_replace]
-        repaired_mask[rows_to_replace, col, bi] = True
-    
-    return cube_fixed, repaired_mask
-
-
-def repair_line_defect_spectral(cube, defect_mask, cols_bands=None):
-    """
-    Repair detected (col,band) defects by spectral interpolation using adjacent bands
-    for the same pixel (row,col). Uses median of band-1 and band+1 (or nearest available).
-    
-    This is useful when spatial neighbors are also defective or when spectral continuity is preferred.
-    
-    Returns cube_fixed, repaired_mask.
-    """
-    r, c, b = cube.shape
-    cube_fixed = cube.copy().astype(float)
-    repaired_mask = np.zeros_like(defect_mask, dtype=bool)
-    
-    if cols_bands is None:
-        cols, bands = np.where(np.any(defect_mask, axis=0))
-        cols_bands = list(zip(cols.tolist(), bands.tolist()))
-    
-    for col, bi in cols_bands:
-        rows = np.where(defect_mask[:, col, bi])[0]
-        for row in rows:
-            # find available spectral neighbors
-            if bi == 0:
-                val = cube[row, col, bi+1]
-            elif bi == b-1:
-                val = cube[row, col, bi-1]
-            else:
-                val = np.median([cube[row, col, bi-1], cube[row, col, bi+1]])
-            cube_fixed[row, col, bi] = val
-            repaired_mask[row, col, bi] = True
-    return cube_fixed, repaired_mask
-
-
-def plot_defect_summary(cube, defect_mask, defects_list=None, band_example=None):
-    """
-    Quick diagnostic plots:
-      - image of defect locations summed across bands (shows vertical lines)
-      - a plot of band_example slice (if given) with defect overlay
-    """
-    r, c, b = cube.shape
-    summed = defect_mask.any(axis=2).astype(int)  # (r,c) True where any band defect
-    plt.figure(figsize=(6,4))
-    plt.imshow(summed, aspect='auto')
-    plt.title('Pixels with any detected defect (summed over bands)')
-    plt.colorbar(label='defect flag')
-    plt.xlabel('column'); plt.ylabel('row')
-    plt.show()
-    
-    if band_example is not None:
-        plt.figure(figsize=(6,3))
-        plt.imshow(cube[:, :, band_example], aspect='auto')
-        plt.title(f'Band {band_example} (example) with defect overlay')
-        # overlay defects at that band
-        overlay = np.zeros((r,c,4))
-        overlay[...,3] = defect_mask[:, :, band_example].astype(float) * 0.6  # alpha
-        plt.imshow(overlay)
-        plt.colorbar()
-        plt.show()
-    
-    if defects_list is not None and len(defects_list) > 0:
-        print('Detected (col, band) defects (sample):', defects_list[:40])
-
-
-def detect_dead_and_outlier_pixels(cube: np.ndarray, lower_thresh: float = 0.1, upper_thresh: float | None = None, z_thresh: int = 3):
-    """
-    Detect dead pixels and outliers in a hyperspectral cube.
-
-    Parameters
-    ----------
-    cube : np.ndarray
-        HSI 3D array, expected shape (H, W, B).
-    lower_thresh : float
-        Values below this are considered dead.
-    upper_thresh : float
-        Values above this are considered dead (None -> use max value).
-    z_thresh : int
-        Threshold for outlier detection in std units.
-
-    Returns
-    -------
-    np.ndarray
-        Boolean mask, True = good pixel, False = dead/outlier
-    """
-    if upper_thresh is None:
-        upper_thresh = np.max(cube)
-    
-    # Dead pixels
-    dead_mask = (cube < lower_thresh) | (cube > upper_thresh)
-    
-    # Outliers (z-score based, per band)
-    band_mean = np.mean(cube, axis=(0,1))
-    band_std  = np.std(cube, axis=(0,1))
-    
-    # Broadcast to cube shape
-    z_score = np.abs((cube - band_mean[None,None,:]) / (band_std[None,None,:] + 1e-8))
-    outlier_mask = z_score > z_thresh
-    
-    # Combine masks: True = good, False = bad
-    mask = ~(dead_mask | outlier_mask)
-    return mask
-
-
-def compute_snr_per_band(cube, mask=None):
-    """
-    Compute SNR per band after masking bad pixels.
-    
-    Parameters:
-        cube: np.ndarray, shape (H, W, B)
-        mask: boolean array of same shape, True = good pixel
-    
-    Returns:
-        snr: np.ndarray, length B
-    """
-    if mask is None:
-        mask = np.ones_like(cube, dtype=bool)
-    
-    B = cube.shape[2]
-    snr = np.zeros(B)
-    
-    for b in range(B):
-        band_pixels = cube[:,:,b][mask[:,:,b]]
-        if band_pixels.size == 0:
-            snr[b] = 0
-        else:
-            snr[b] = np.mean(band_pixels) / (np.std(band_pixels) + 1e-8)
-    
-    return snr
-
-
-def block_average_cube(cube, block_size=5):
-    H, W, B = cube.shape
-
-    H_crop = H - (H % block_size)
-    W_crop = W - (W % block_size)
-    cube_cropped = cube[:H_crop, :W_crop, :]
-
-    h_blocks = H_crop // block_size
-    w_blocks = W_crop // block_size
-    cube_blocks = cube_cropped.reshape(h_blocks, block_size, w_blocks, block_size, B)
-    
-    averaged = cube_blocks.mean(axis=(1, 3))
-
-    return averaged
-
-
-# VARIANCE RATIO - BETWEEN VS WITHIN CLASSES
-
-def class_variance_ratio(X, y):
-    classes = np.unique(y)
-    n_features = X.shape[1]
-    mu_global = X.mean(axis=0)
-    
-    S_W = np.zeros((n_features, n_features))
-    S_B = np.zeros((n_features, n_features))
-    
-    for cls in classes:
-        X_i = X[y == cls]
-        mu_i = X_i.mean(axis=0)
-        S_W += (X_i - mu_i).T @ (X_i - mu_i)
-        S_B += X_i.shape[0] * np.outer(mu_i - mu_global, mu_i - mu_global)
-    
-    within_var = np.trace(S_W)
-    between_var = np.trace(S_B)
-    
-    ratio = between_var / within_var
-    return within_var, between_var, ratio
 
 # Reflectance to absorbance - Lambert-Beer or Kubelka-Munk
 def reflectance_to_absorbance(R, method='lambert'):
     """
     Convert reflectance spectra to absorbance (Lambert-Beer) or Kubelka-Munk units.
 
-    Parameters:
+    Parameters
+    ----------
     R : array-like
         Reflectance values (0 < R <= 1)
     method : str
-        'lambert' for Lambert-Beer, 'kubelka' for Kubelka-Munk
+        - 'lambert' for Lambert-Beer
+        - 'kubelka' for Kubelka-Munk
 
-    Returns:
+    Returns
+    -------
     absorbance : array-like
         Transformed values
     """
