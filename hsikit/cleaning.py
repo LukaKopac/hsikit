@@ -20,7 +20,7 @@ def identify_dead_pixels(
         HSI 3D array, expected shape (H, W, B)
     threshold : float
         Multiplier applied to the standard deviation of the local residual.
-        Typical working range: ~20–60 for current setup.
+        Typical working range: ~20-60 for current setup.
     kernel_size : tuple[int, int]
         Shape of median filter kernel size
     visualize : bool
@@ -205,3 +205,47 @@ class DeadPixelProcessor:
     def clean(self, cube, strategy="spectral"):
         mask = self.identify(cube)
         return self.interpolate(cube, mask)
+    
+# Convert dictionary to X, y arrays
+def dict2Xy(sample_dictionary):
+    """ 
+    Converts a dictionary of [key:np.ndarray] or [key:list[np.ndarray]] to X (n_samples, B) and y (n_samples,) arrays.
+    
+    Parameters
+    ----------
+    sample_dictionary : dict
+    
+    Returns
+    -------
+    X : np.ndarray
+    y : np.ndarray
+    """
+    
+    X = []
+    y = []
+    feature_dim = None
+
+    if not sample_dictionary:
+        raise ValueError("Input dictionary is empty")
+
+    for label, cube in sample_dictionary.items():
+        cubes = cube if isinstance(cube, list) else [cube]
+
+        for c in cubes:
+            if not isinstance(c, np.ndarray):
+                raise ValueError("Expected np.ndarray or list of np.ndarray")
+
+            if c.ndim < 2:
+                raise ValueError("Each array must be at least 2D")
+
+            flattened = c.reshape(-1, c.shape[-1])
+
+            if feature_dim is None:
+                feature_dim = flattened.shape[1]
+            elif flattened.shape[1] != feature_dim:
+                raise ValueError("Inconsistent feature dimensions")
+
+            X.append(flattened)
+            y.extend([label] * flattened.shape[0])
+
+    return np.vstack(X), np.array(y)
