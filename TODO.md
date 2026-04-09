@@ -13,12 +13,6 @@ Tasks related to new content and functionality.
 ### Related to *binary_masks.py*
 - [ ] Add manual interactive masking options (pixel/wider pixel area eg. 5x5, rectangle, polygon)  
 
-### Other
-- [ ] Add a module that focuses on data cleaning/cleansing
-- [ ] **Outlier and dead pixel detection/removal**  
-- [ ] Add cube subsampling options such as 5x5 or 10x10 pixel mean/median aggregation  
-- [ ] Convert dictionary of cubes to X (n_samples, n_features) and y (n_samples) matrices (keep track of individual samples)  
-
 ## Fixes
 
 Tasks related to fixes, cleaning and organization.
@@ -32,6 +26,10 @@ Tasks related to fixes, cleaning and organization.
 
 ## DONE
 
+- [x] Add a module that focuses on data cleaning/cleansing
+- [x] **Outlier and dead pixel detection/removal**  
+- [x] Add cube subsampling options such as 5x5 or 10x10 pixel mean/median aggregation  
+- [x] Convert dictionary of cubes to X (n_samples, n_features) and y (n_samples) matrices (keep track of individual samples)  
 - [x] Add shadow percentile option to SAM mask
 - [x] Add SAM masking function  
 - [x] Direct spectral extraction (mean/median per area)  
