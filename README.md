@@ -18,6 +18,7 @@ project-root/
 ├── hsikit/
 │   ├── __init__.py
 │   ├── hsi_io.py           # ⭐ Load data
+│   ├── base_utils.py       # ⭐ Data transformation, processing, utility
 │   ├── visualizations.py   # ⭐ HSI visualization
 │   ├── cleaning.py         # ⭐ Clean data, remove dead pixels/extreme outliers
 │   ├── masking_utility.py  # Masking related helper functions
