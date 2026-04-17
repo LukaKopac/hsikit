@@ -43,6 +43,7 @@ from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import KFold
 from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.metrics import mean_squared_error
 from scipy.stats import chi2
 from scipy import sparse
 
@@ -96,8 +97,9 @@ def asls_baseline(y, lam=1e6, p=0.001, niter=10):
         Number of iterations
     """
     L = len(y)
-    D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L-2))
+    D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L-2)) # type: ignore[arg-type]
     w = np.ones(L)
+    y = np.asarray(y)
 
     for _ in range(niter):
         W = sparse.spdiags(w, 0, L, L)
@@ -311,12 +313,39 @@ def compute_binned_stats(intensities, wavelengths, bin_edges):
 
 # Based on CARS
 
-def rmse_cv(X, y, n_components=10, n_splits=5):
+def rmse_cv(X: np.ndarray, y: np.ndarray, n_components: int = 10, n_splits: int = 5) -> float:
+    """
+    Compute cross-validated Root Mean Squared Error (RMSE) using PLS regression.
+
+    This function performs K-fold cross-validation with Partial Least Squares (PLS)
+    regression and returns the mean RMSE across folds.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        HSI 3D array, expected shape (n_samples, B)
+    y : np.ndarray
+        Labels vector, expected shape (n_samples,)
+    n_components : int
+        Number of PLS components to use in the regression model.
+    n_splits : int
+        Number of folds for K-fold cross-validation.
+    
+    Returns
+    -------
+    float
+        Mean RMSE across all cross-validation folds.
+
+    Notes
+    -----
+    - The data is shuffled before splitting using a fixed random state (42).
+    - RMSE is computed as the square root of the mean squared error (MSE).
+    - This function is typically used as an evaluation metric within
+      iterative feature selection algorithms such as CARS.
+
+    """
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     rmses = []
-
-    def mean_squared_error():
-        pass
 
     for train, test in kf.split(X):
         pls = PLSRegression(n_components=n_components)
@@ -324,9 +353,64 @@ def rmse_cv(X, y, n_components=10, n_splits=5):
         y_pred = pls.predict(X[test]).ravel()
         rmses.append(np.sqrt(mean_squared_error(y[test], y_pred)))
 
-    return np.mean(rmses)
+    return float(np.mean(rmses))
 
-def CARS(X, y, n_components=10, n_mc=50, sample_ratio=0.9, cv_splits=5, random_state=42, return_all=True):
+def CARS(X: np.ndarray,
+         y: np.ndarray,
+         n_components: int = 10,
+         n_mc: int = 50,
+         sample_ratio: float = 0.9,
+         cv_splits: int = 5,
+         random_state: int = 42,
+         return_all: bool = True
+    ) -> tuple[np.ndarray, list[float]] | tuple[np.ndarray, list[float], list[np.ndarray]]:
+    """
+    Competitive Adaptive Reweighted Sampling (CARS) for feature selection
+    using Partial Least Squares (PLS) regression.
+
+    CARS is an iterative variable selection method that combines Monte Carlo
+    sampling with PLS regression coefficients to progressively eliminate
+    less informative variables. At each iteration, variables are ranked by
+    importance and a decreasing subset is retained based on an exponential
+    decay schedule. Model performance is evaluated using cross-validated RMSE.
+
+    Parameters
+    ----------
+    X : ndarray of shape (n_samples, n_features)
+        Predictor matrix.
+    y : ndarray of shape (n_samples,) or (n_samples, n_targets)
+        Response vector or matrix.
+    n_components : int, default=10
+        Maximum number of PLS components.
+    n_mc : int, default=50
+        Number of Monte Carlo sampling iterations.
+    sample_ratio : float, default=0.9
+        Fraction of samples to use in each Monte Carlo iteration.
+    cv_splits : int, default=5
+        Number of folds for cross-validation when evaluating subsets.
+    random_state : int, default=42
+        Seed for reproducibility.
+    return_all : bool, default=True
+        If True, return RMSE trajectory and variable subsets for all iterations.
+
+    Returns
+    -------
+    best_vars : ndarray
+        Indices of the selected variables corresponding to the lowest RMSE.
+    rmse_list : list of float
+        RMSE values at each iteration.
+    var_list : list of ndarray, optional
+        List of variable index subsets at each iteration. Returned only if
+        `return_all=True`.
+
+    Notes
+    -----
+    - Variable importance is estimated from absolute PLS regression coefficients.
+    - The number of retained variables decreases exponentially over iterations.
+    - The final subset is chosen based on minimum cross-validated RMSE.
+    - Ensures that the number of variables is always sufficient for the chosen
+      number of PLS components.
+    """
     rng = np.random.default_rng(random_state)
 
     n_samples, n_vars = X.shape
@@ -349,7 +433,7 @@ def CARS(X, y, n_components=10, n_mc=50, sample_ratio=0.9, cv_splits=5, random_s
         pls.fit(X_mc, y_mc)
 
         # ---- Variable importance
-        coef = np.abs(pls.coef_).ravel()
+        coef = np.abs(pls.coef_).flatten()
 
         # ---- Number of variables to keep
         k = int(n_vars * np.exp(-decay * i))
@@ -403,7 +487,7 @@ class SoftPLSDA(BaseEstimator, ClassifierMixin):
         self._ohencoder = OneHotEncoder(sparse_output=False)
         y_ohe = self._ohencoder.fit_transform(y.reshape(-1, 1))
 
-        self._classes = self._ohencoder.categories_[0]
+        self._classes = np.asarray(self._ohencoder.categories_[0])
         n_classes = len(self._classes)
 
         # Class masks
