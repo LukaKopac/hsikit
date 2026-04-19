@@ -5,64 +5,43 @@ Note: This module is under active development and may change.
 """
 
 import numpy as np
+from numpy.typing import ArrayLike
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure, SubFigure
+from matplotlib.axes import Axes
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 
+from typing import Literal, Optional
+
 # Based on binning
-def plot_spectrum_with_bins(wavelengths, intensities, bin_edges, title, show_centers=False, savefig=False):
-    """
-    Plot the original spectrum and vertical lines for bin edges.
-
-    Parameters:
-        wavelengths (array-like): Wavelength values of the spectrum.
-        intensities (array-like): Intensity values of the spectrum.
-        bin_edges (array-like): Bin edge wavelengths.
-        show_centers (bool): Whether to also show bin centers.
-    """
-    wavelengths = np.array(wavelengths)
-    intensities = np.array(intensities)
-    bin_edges = np.array(bin_edges)
-
-    plt.figure(figsize=(10, 5))
-    plt.plot(wavelengths, intensities, label='Original Spectrum', color='blue')
-
-    for edge in bin_edges:
-        plt.axvline(x=edge, color='red', linestyle='--', linewidth=1)
-
-    if show_centers:
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-        for center in bin_centers:
-            plt.axvline(x=center, color='green', linestyle=':', linewidth=1)
-        plt.legend(['Spectrum', 'Bin Edges', 'Bin Centers'])
-    else:
-        plt.legend(['Spekter', 'Robovi razredov'])
-
-    plt.xlabel('Valovna dolžina (nm)')
-    plt.ylabel('Intenziteta')
-    plt.title(title)
-    plt.grid(True)
-    plt.tight_layout()
-    if savefig:
-        plt.savefig(title+'.png', dpi=300)
-    plt.show()
-
-
-def adaptive_equalize_spectrum(intensities, wavelengths, n_bins=10, method='intensity'):
+def adaptive_equalize_spectrum(
+        intensities: ArrayLike,
+        wavelengths: ArrayLike,
+        n_bins: int = 10,
+        method: Literal['intensity', 'count'] = 'intensity'
+    ) -> tuple[np.ndarray, np.ndarray]:
     """
     Equalizes a spectrum by adaptively binning wavelengths.
     
-    Parameters:
-        intensities (array-like): Intensity values of the spectrum.
-        wavelengths (array-like): Corresponding wavelength values.
-        n_bins (int): Number of bins to use.
-        method (str): 'intensity' to equalize total intensity per bin,
-                      'count' to equalize number of points per bin.
+    Parameters
+    ----------
+    intensities : array-like
+        Intensity values of the spectrum.
+    wavelengths : array-like
+        Corresponding wavelength values.
+    n_bins : int
+        Number of bins to use.
+    method : str
+        - 'intensity' to equalize total intensity per bin,
+        - 'count' to equalize number of points per bin.
     
     Returns:
-        equalized_spectrum (np.ndarray): Binned intensity values.
-        bin_edges (np.ndarray): Edges of the wavelength bins.
+    equalized_spectrum : np.ndarray
+        Binned intensity values.
+    bin_edges : np.ndarray
+        Edges of the wavelength bins.
     """
     intensities = np.array(intensities)
     wavelengths = np.array(wavelengths)
@@ -107,32 +86,30 @@ def adaptive_equalize_spectrum(intensities, wavelengths, n_bins=10, method='inte
 
     return equalized_spectrum, bin_edges
 
-def compute_bin_centers(bin_edges):
-    """
-    Compute bin centers from bin edges.
 
-    Parameters:
-        bin_edges (array-like): Array of bin edge values (length N+1 for N bins).
-
-    Returns:
-        bin_centers (np.ndarray): Array of bin centers (length N).
-    """
-    bin_edges = np.array(bin_edges)
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    return bin_centers
-
-def adaptive_binning_by_gradient(intensities, wavelengths, n_bins=20):
+def adaptive_binning_by_gradient(
+        intensities: ArrayLike,
+        wavelengths: ArrayLike,
+        n_bins: int = 20
+    ) -> tuple[np.ndarray, np.ndarray]:
     """
     Adaptive binning based on spectral changes (derivative of the spectrum).
     
-    Parameters:
-        intensities (array-like): Intensity values of the spectrum.
-        wavelengths (array-like): Corresponding wavelength values.
-        n_bins (int): Number of bins to produce.
+    Parameters
+    ----------
+    intensities : array-like
+        Intensity values of the spectrum.
+    wavelengths : array-like
+        Corresponding wavelength values.
+    n_bins : int
+        Number of bins to produce.
         
-    Returns:
-        binned_spectrum (np.ndarray): Averaged intensity per bin.
-        bin_edges (np.ndarray): Wavelength edges of the bins.
+    Returns
+    -------
+    binned_spectrum : np.ndarray
+        Averaged intensity per bin.
+    bin_edges : np.ndarray
+        Wavelength edges of the bins.
     """
     intensities = np.array(intensities)
     wavelengths = np.array(wavelengths)
@@ -168,19 +145,47 @@ def adaptive_binning_by_gradient(intensities, wavelengths, n_bins=20):
 
     return np.array(binned_spectrum), bin_edges
 
+def compute_bin_centers(bin_edges: ArrayLike) -> np.ndarray:
+    """
+    Compute bin centers from bin edges.
 
-def compute_binned_stats(intensities, wavelengths, bin_edges):
+    Parameters
+    ----------
+    bin_edges : array-like
+        Array of bin edge values (length N+1 for N bins).
+
+    Returns
+    -------
+    bin_centers : np.ndarray
+        Array of bin centers (length N).
+    """
+    bin_edges = np.array(bin_edges)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    return bin_centers
+
+def compute_binned_stats(
+        intensities: ArrayLike,
+        wavelengths: ArrayLike,
+        bin_edges: ArrayLike
+    ) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute mean and standard deviation of intensities within each bin.
     
-    Parameters:
-        intensities (array-like): Intensity values of the spectrum.
-        wavelengths (array-like): Corresponding wavelength values.
-        bin_edges (array-like): Edges of the wavelength bins (length N+1).
+    Parameters
+    ----------
+    intensities : array-like
+        Intensity values of the spectrum.
+    wavelengths : array-like
+        Corresponding wavelength values.
+    bin_edges : array-like
+        Edges of the wavelength bins (length N+1).
     
-    Returns:
-        means (np.ndarray): Mean intensity in each bin.
-        stds (np.ndarray): Standard deviation of intensity in each bin.
+    Returns
+    -------
+    means : np.ndarray
+        Mean intensity in each bin.
+    stds : np.ndarray
+        Standard deviation of intensity in each bin.
     """
     intensities = np.array(intensities)
     wavelengths = np.array(wavelengths)
@@ -209,10 +214,61 @@ def compute_binned_stats(intensities, wavelengths, bin_edges):
 
     return np.array(means), np.array(stds)
 
+def plot_spectrum_with_bins(
+        wavelengths: ArrayLike,
+        intensities: ArrayLike,
+        bin_edges: ArrayLike,
+        title: str,
+        show_centers: bool = False,
+        ax: Optional[Axes] = None
+    ) -> tuple[Figure | SubFigure, Axes]:
+    """
+    Plot the original spectrum and vertical lines for bin edges.
+
+    Parameters:
+        wavelengths (array-like): Wavelength values of the spectrum.
+        intensities (array-like): Intensity values of the spectrum.
+        bin_edges (array-like): Bin edge wavelengths.
+        show_centers (bool): Whether to also show bin centers.
+    """
+    wavelengths = np.array(wavelengths)
+    intensities = np.array(intensities)
+    bin_edges = np.array(bin_edges)
+
+    if ax is None:
+        fig = plt.figure(figsize=(10, 6))
+        ax = fig.add_subplot(111)
+    else:
+        fig = ax.figure
+
+    ax.plot(wavelengths, intensities, label='Original Spectrum', color='blue')
+
+    for edge in bin_edges:
+        ax.axvline(x=edge, color='red', linestyle='--', linewidth=1)
+
+    if show_centers:
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        for center in bin_centers:
+            ax.axvline(x=center, color='green', linestyle=':', linewidth=1)
+        ax.legend(['Spectrum', 'Bin Edges', 'Bin Centers'])
+    else:
+        ax.legend(['Spectrum', 'Bin Edges'])
+
+    ax.set_xlabel('Wavelength (nm)')
+    ax.set_ylabel('Intensity')
+    ax.set_title(title)
+    ax.grid(True)
+
+    return fig, ax
 
 # Based on CARS
 
-def rmse_cv(X: np.ndarray, y: np.ndarray, n_components: int = 10, n_splits: int = 5) -> float:
+def rmse_cv(
+        X: np.ndarray,
+        y: np.ndarray,
+        n_components: int = 10,
+        n_splits: int = 5
+    ) -> float:
     """
     Compute cross-validated Root Mean Squared Error (RMSE) using PLS regression.
 

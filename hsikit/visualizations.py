@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from matplotlib.colors import Colormap
-from matplotlib.figure import Figure
+from matplotlib.figure import Figure, SubFigure
 from matplotlib.axes import Axes
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -30,7 +30,7 @@ def plot_image(
     grid_color: str = 'white',
     grid_spacing: int = 50,
     ax: Optional[Axes] = None
-) -> tuple[Figure, Axes]:
+) -> tuple[Figure | SubFigure, Axes]:
     """
     Plot a single band as grayscale or an RGB composite from selected bands.
 
@@ -110,7 +110,7 @@ def plot_spectra(
     title: Optional[str] = None,
     color: str = 'blue',
     ax: Optional[Axes] = None
-) -> tuple[Figure, Axes]:
+) -> tuple[Figure | SubFigure, Axes]:
     """
     Plot spectral profiles from pixels, the average spectrum, with optional ±std and min/max envelopes.
 
@@ -210,7 +210,7 @@ def plot_spectral_hist(
     log_scale: bool = False,
     title: Optional[str] = None,
     ax: Optional[Axes] = None
-) -> tuple[Figure, Axes]:
+) -> tuple[Figure | SubFigure, Axes]:
     """
     Plot a histogram of reflectance/intensity values from a single band or entire hypercube.
 

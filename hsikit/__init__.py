@@ -2,7 +2,7 @@ from . import base_utils
 from . import binary_masks
 from . import cleaning
 from . import extractors
-from . import feature_extraction
+from . import feature_selection
 from . import hsi_io
 from . import masking_utility
 from . import preprocessing
