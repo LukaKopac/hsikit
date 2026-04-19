@@ -37,7 +37,8 @@ def adaptive_equalize_spectrum(
         - 'intensity' to equalize total intensity per bin,
         - 'count' to equalize number of points per bin.
     
-    Returns:
+    Returns
+    -------
     equalized_spectrum : np.ndarray
         Binned intensity values.
     bin_edges : np.ndarray
@@ -218,18 +219,29 @@ def plot_spectrum_with_bins(
         wavelengths: ArrayLike,
         intensities: ArrayLike,
         bin_edges: ArrayLike,
-        title: str,
+        title: str = 'Binned spectrum',
         show_centers: bool = False,
         ax: Optional[Axes] = None
     ) -> tuple[Figure | SubFigure, Axes]:
     """
     Plot the original spectrum and vertical lines for bin edges.
 
-    Parameters:
-        wavelengths (array-like): Wavelength values of the spectrum.
-        intensities (array-like): Intensity values of the spectrum.
-        bin_edges (array-like): Bin edge wavelengths.
-        show_centers (bool): Whether to also show bin centers.
+    Parameters
+    ----------
+    wavelengths : array-like
+        Wavelength values of the spectrum.
+    intensities : array-like
+        Intensity values of the spectrum.
+    bin_edges : array-like
+        Bin edge wavelengths.
+    show_centers : bool
+        Whether to also show bin centers.
+    ax : Optional[Axes]
+        Existing matplotlib axes. If None, creates a new figure.
+
+    Returns
+    -------
+    tuple[fig, ax]
     """
     wavelengths = np.array(wavelengths)
     intensities = np.array(intensities)
@@ -278,7 +290,7 @@ def rmse_cv(
     Parameters
     ----------
     X : np.ndarray
-        HSI 3D array, expected shape (n_samples, B)
+        Sample matrix, expected shape (n_samples, n_features)
     y : np.ndarray
         Labels vector, expected shape (n_samples,)
     n_components : int
