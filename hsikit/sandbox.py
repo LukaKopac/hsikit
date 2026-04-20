@@ -37,12 +37,89 @@ Good ideas to implement:
 """
 
 import numpy as np
+from numpy.typing import ArrayLike
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.base import BaseEstimator, ClassifierMixin
 from scipy.stats import chi2
 from scipy import sparse
+
+from typing import Literal
+
+# ----------------------------------------------------------------- FEATURE SELECTION -------------------------------------
+
+def adaptive_equalize_spectrum(
+        intensities: ArrayLike,
+        wavelengths: ArrayLike,
+        n_bins: int = 10,
+        method: Literal['intensity', 'count'] = 'intensity'
+    ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Equalizes a spectrum by adaptively binning wavelengths.
+    
+    Parameters
+    ----------
+    intensities : array-like
+        Intensity values of the spectrum.
+    wavelengths : array-like
+        Corresponding wavelength values.
+    n_bins : int
+        Number of bins to use.
+    method : str
+        - 'intensity' to equalize total intensity per bin,
+        - 'count' to equalize number of points per bin.
+    
+    Returns
+    -------
+    equalized_spectrum : np.ndarray
+        Binned intensity values.
+    bin_edges : np.ndarray
+        Edges of the wavelength bins.
+    """
+    intensities = np.array(intensities)
+    wavelengths = np.array(wavelengths)
+
+    # Sort by wavelength
+    sort_idx = np.argsort(wavelengths)
+    wavelengths = wavelengths[sort_idx]
+    intensities = intensities[sort_idx]
+
+    if method == 'intensity':
+        # Cumulative intensity sum to define equal-intensity bins
+        cumulative = np.cumsum(intensities)
+        total_intensity = cumulative[-1]
+        targets = np.linspace(0, total_intensity, n_bins + 1)
+        bin_indices = np.searchsorted(cumulative, targets)
+    elif method == 'count':
+        # Equal number of samples per bin
+        total_points = len(wavelengths)
+        bin_indices = np.linspace(0, total_points, n_bins + 1, dtype=int)
+    else:
+        raise ValueError("Method must be 'intensity' or 'count'.")
+
+    # Compute bin edges and equalized spectrum
+    bin_edges = []
+    equalized_spectrum = []
+
+    for i in range(n_bins):
+        start = bin_indices[i]
+        end = bin_indices[i + 1]
+        if end > start:
+            bin_wavelengths = wavelengths[start:end]
+            bin_intensities = intensities[start:end]
+            bin_edges.append((bin_wavelengths[0], bin_wavelengths[-1]))
+            equalized_spectrum.append(np.mean(bin_intensities))
+        else:
+            # If no data in bin (can happen with intensity method), skip
+            continue
+
+    # Convert bin_edges to array of edges
+    bin_edges = np.array([edge[0] for edge in bin_edges] + [bin_edges[-1][1]])
+    equalized_spectrum = np.array(equalized_spectrum)
+
+    return equalized_spectrum, bin_edges
+
 
 # ----------------------------------------------------------------- CLEANING / EXPLORATORY -----------------------------------------------
 

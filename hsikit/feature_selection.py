@@ -12,81 +12,13 @@ from matplotlib.axes import Axes
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.feature_selection import f_classif
+from scipy.ndimage import gaussian_filter1d
 
-from typing import Literal, Optional
+from typing import Optional, Literal
 
 # Based on binning
-def adaptive_equalize_spectrum(
-        intensities: ArrayLike,
-        wavelengths: ArrayLike,
-        n_bins: int = 10,
-        method: Literal['intensity', 'count'] = 'intensity'
-    ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Equalizes a spectrum by adaptively binning wavelengths.
-    
-    Parameters
-    ----------
-    intensities : array-like
-        Intensity values of the spectrum.
-    wavelengths : array-like
-        Corresponding wavelength values.
-    n_bins : int
-        Number of bins to use.
-    method : str
-        - 'intensity' to equalize total intensity per bin,
-        - 'count' to equalize number of points per bin.
-    
-    Returns
-    -------
-    equalized_spectrum : np.ndarray
-        Binned intensity values.
-    bin_edges : np.ndarray
-        Edges of the wavelength bins.
-    """
-    intensities = np.array(intensities)
-    wavelengths = np.array(wavelengths)
-
-    # Sort by wavelength
-    sort_idx = np.argsort(wavelengths)
-    wavelengths = wavelengths[sort_idx]
-    intensities = intensities[sort_idx]
-
-    if method == 'intensity':
-        # Cumulative intensity sum to define equal-intensity bins
-        cumulative = np.cumsum(intensities)
-        total_intensity = cumulative[-1]
-        targets = np.linspace(0, total_intensity, n_bins + 1)
-        bin_indices = np.searchsorted(cumulative, targets)
-    elif method == 'count':
-        # Equal number of samples per bin
-        total_points = len(wavelengths)
-        bin_indices = np.linspace(0, total_points, n_bins + 1, dtype=int)
-    else:
-        raise ValueError("Method must be 'intensity' or 'count'.")
-
-    # Compute bin edges and equalized spectrum
-    bin_edges = []
-    equalized_spectrum = []
-
-    for i in range(n_bins):
-        start = bin_indices[i]
-        end = bin_indices[i + 1]
-        if end > start:
-            bin_wavelengths = wavelengths[start:end]
-            bin_intensities = intensities[start:end]
-            bin_edges.append((bin_wavelengths[0], bin_wavelengths[-1]))
-            equalized_spectrum.append(np.mean(bin_intensities))
-        else:
-            # If no data in bin (can happen with intensity method), skip
-            continue
-
-    # Convert bin_edges to array of edges
-    bin_edges = np.array([edge[0] for edge in bin_edges] + [bin_edges[-1][1]])
-    equalized_spectrum = np.array(equalized_spectrum)
-
-    return equalized_spectrum, bin_edges
-
 
 def adaptive_binning_by_gradient(
         intensities: ArrayLike,
@@ -272,6 +204,139 @@ def plot_spectrum_with_bins(
     ax.grid(True)
 
     return fig, ax
+
+
+class AdaptiveSpectralBinner(BaseEstimator, TransformerMixin):
+    def __init__(
+        self,
+        n_bins: int = 20,
+        method: Literal['gradient', 'std', 'supervised', 'hybrid'] = 'std',
+        smooth_sigma: Optional[float] = None,
+        hybrid_alpha: float = 0.5
+    ):
+        self.n_bins = n_bins
+        self.method = method
+        self.smooth_sigma = smooth_sigma
+        self.hybrid_alpha = hybrid_alpha
+        self.bin_edges_ = None
+
+    # -------------------------
+    # Utility: smoothing
+    # -------------------------
+    def _smooth(self, signal):
+        if self.smooth_sigma is None:
+            return signal
+        return gaussian_filter1d(signal, self.smooth_sigma)
+
+    # -------------------------
+    # Compute importance
+    # -------------------------
+    def _compute_importance(self, X, wavelengths, y=None):
+        if self.method == 'gradient':
+            ref = np.mean(X, axis=0)
+            ref = self._smooth(ref)
+            importance = np.abs(np.gradient(ref, wavelengths))
+
+        elif self.method == 'std':
+            importance = np.std(X, axis=0)
+
+        elif self.method == 'supervised':
+            if y is None:
+                raise ValueError("y must be provided for supervised method")
+            scores, _ = f_classif(X, y)
+            importance = np.nan_to_num(scores)
+
+        elif self.method == 'hybrid':
+            # combine std + gradient
+            ref = np.mean(X, axis=0)
+            ref = self._smooth(ref)
+            grad = np.abs(np.gradient(ref, wavelengths))
+            std = np.std(X, axis=0)
+
+            grad = grad / (np.sum(grad) + 1e-12)
+            std = std / (np.sum(std) + 1e-12)
+
+            importance = self.hybrid_alpha * std + (1 - self.hybrid_alpha) * grad
+
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
+        # normalize
+        importance = np.clip(importance, 0, None)
+        total = np.sum(importance)
+
+        if total == 0:
+            raise ValueError("Importance is all zeros")
+
+        return importance / total
+
+    # -------------------------
+    # FIT: learn bin edges
+    # -------------------------
+    def fit(self, X, wavelengths, y=None):
+        X = np.asarray(X)
+        wavelengths = np.asarray(wavelengths)
+
+        # sort by wavelength
+        sort_idx = np.argsort(wavelengths)
+        wavelengths = wavelengths[sort_idx]
+        X = X[:, sort_idx]
+
+        importance = self._compute_importance(X, wavelengths, y)
+
+        cumulative = np.cumsum(importance)
+        thresholds = np.linspace(0, 1, self.n_bins + 1)
+
+        indices = np.searchsorted(cumulative, thresholds)
+
+        # fix boundaries
+        indices[0] = 0
+        indices[-1] = len(wavelengths) - 1
+
+        self.bin_edges_ = wavelengths[indices]
+
+        return self
+
+    # -------------------------
+    # TRANSFORM: apply binning
+    # -------------------------
+    def transform(self, X, wavelengths):
+        if self.bin_edges_ is None:
+            raise RuntimeError("Call fit() before transform()")
+
+        X = np.asarray(X)
+        wavelengths = np.asarray(wavelengths)
+
+        # sort same way
+        sort_idx = np.argsort(wavelengths)
+        wavelengths = wavelengths[sort_idx]
+        X = X[:, sort_idx]
+
+        X_binned = []
+
+        for spectrum in X:
+            binned = []
+
+            for i in range(len(self.bin_edges_) - 1):
+                start = self.bin_edges_[i]
+                end = self.bin_edges_[i + 1]
+
+                mask = (wavelengths >= start) & (wavelengths < end)
+                values = spectrum[mask]
+
+                if len(values) > 0:
+                    binned.append(np.mean(values))
+                else:
+                    binned.append(np.nan)
+
+            X_binned.append(binned)
+
+        return np.array(X_binned)
+
+    # -------------------------
+    def fit_transform(self, X, wavelengths, y=None):
+        return self.fit(X, wavelengths, y).transform(X, wavelengths)
+
 
 # Based on CARS
 
