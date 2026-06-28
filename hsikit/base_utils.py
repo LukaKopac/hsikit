@@ -1,7 +1,9 @@
 """
-Utilities for extracting spectra from hyperspectral data.
-
-This module provides helper functions for extracting spectra - static grid-based and interactive.
+General utility functions:
+- block_average_cube (subsample HSI cube, aggregates individual spatial pixels)
+- dict2Xy (converts a dictionary to X matrix and y vector)
+- compute_snr_per_band (signal to noise ratio per band)
+- class_variance_ratio (between classes to within classes variance ratio)
 
 Note: This module is under active development and may change.
 """
@@ -12,6 +14,7 @@ import numpy as np
 def block_average_cube(cube: np.ndarray, block_size: int = 5) -> np.ndarray:
     """
     Subsamples / block averages a cube.
+    The cube is cropped in the process to enforce 'block_size' parameter (if cube shape not divisible by it).
 
     Parameters
     ----------
@@ -29,10 +32,10 @@ def block_average_cube(cube: np.ndarray, block_size: int = 5) -> np.ndarray:
 
     H_crop = H - (H % block_size)
     W_crop = W - (W % block_size)
-    cube_cropped = cube[:H_crop, :W_crop, :]
+    cube_cropped = cube[:H_crop, :W_crop, :] # crop cube to enforce division by block_size
 
     h_blocks = H_crop // block_size
-    w_blocks = W_crop // block_size
+    w_blocks = W_crop // block_size # number of expected blocks in height and width
     cube_blocks = cube_cropped.reshape(h_blocks, block_size, w_blocks, block_size, B)
     
     averaged = cube_blocks.mean(axis=(1, 3))
@@ -48,6 +51,7 @@ def dict2Xy(sample_dictionary: dict[str, list[np.ndarray] | np.ndarray]) -> tupl
     Parameters
     ----------
     sample_dictionary : dict
+        Structured either [key:np.ndarray] or [key:list[np.ndarray]]
     
     Returns
     -------
@@ -115,7 +119,10 @@ def compute_snr_per_band(cube: np.ndarray, mask: None | np.ndarray = None) -> np
 # VARIANCE RATIO - BETWEEN VS WITHIN CLASSES
 def class_variance_ratio(X: np.ndarray, y: np.ndarray) -> tuple[float, float, float]:
     """
-    Computes between classes to within classes variance ratio.
+    Computes between classes variance, within classes variance and their ratio.
+    High ratio means:
+    - samples within each class are tightly clustered
+    - different classes are far apart
 
     Parameters
     ----------
@@ -143,7 +150,7 @@ def class_variance_ratio(X: np.ndarray, y: np.ndarray) -> tuple[float, float, fl
     for cls in classes:
         X_i = X[y == cls]
         mu_i = X_i.mean(axis=0)
-        S_W += (X_i - mu_i).T @ (X_i - mu_i)
+        S_W += (X_i - mu_i).T @ (X_i - mu_i) # scatter matrices
         S_B += X_i.shape[0] * np.outer(mu_i - mu_global, mu_i - mu_global)
     
     within_var = np.trace(S_W)
