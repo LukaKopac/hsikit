@@ -1,6 +1,6 @@
 # hsikit
 
-This repository contains a collection of Python functions and classes developed for **working with hyperspectral data acquired using ClydeHSI systems**.
+This repository contains a collection of Python functions and classes developed for working with **hyperspectral data**.
 
 The code reflects an **internal research toolbox**, built iteratively during multiple experiments.
 
@@ -42,7 +42,7 @@ project-root/
 
 This repository is intended to:
 
-- Provide **practical utilities** for handling ClydeHSI hyperspectral data
+- Provide **practical utilities** for handling hyperspectral data
 - Capture **real-world preprocessing and analysis patterns** used during research
 - Serve as a **transparent methodological reference**
 
@@ -52,7 +52,7 @@ This repository is intended to:
 
 The utilities in this repository include functionality such as:
 
-- Loading and handling ClydeHSI-specific data formats (combination of .raw and .hdr files)
+- Loading and handling specific data formats (combination of .raw and .hdr files)
 - Data visualization (hypercube, spectra, histograms)
 - Basic preprocessing and normalization routines
 - Masking and background removal
@@ -62,7 +62,6 @@ The utilities in this repository include functionality such as:
 
 ## What this code does *not* guarantee
 
-- Compatibility with other HSI systems
 - A stable or well-defined public API
 - Optimized performance
 - Backward compatibility between versions
