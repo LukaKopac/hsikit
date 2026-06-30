@@ -1,4 +1,5 @@
 # hsikit
+Internal document to keep track of package structure and individual functionality of classes and functions.
 
 ## Overview
 
@@ -30,7 +31,7 @@
 * [manual_rect_split()](#manual_rect_split)
 * [mask_manual_thresh()](#mask_manual_thresh)
 * [mask_top_contrast()](#mask_top_contrast)
-* [mask_top_contrastV2()](#mask_topcontrastv2)
+* [mask_top_contrastV2()](#mask_top_contrastv2)
 * [mask_SAM()](#mask_sam)
 * [mask_highpass_otsu()](#mask_highpass_otsu)
 * [mask_kmeans()](#mask_kmeans)
