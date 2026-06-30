@@ -29,9 +29,7 @@ Internal document to keep track of package structure and individual functionalit
 **Functions**
 
 * [manual_rect_split()](#manual_rect_split)
-* [mask_manual_thresh()](#mask_manual_thresh)
 * [mask_top_contrast()](#mask_top_contrast)
-* [mask_top_contrastV2()](#mask_top_contrastv2)
 * [mask_SAM()](#mask_sam)
 * [mask_highpass_otsu()](#mask_highpass_otsu)
 * [mask_kmeans()](#mask_kmeans)
@@ -218,7 +216,7 @@ Internal document to keep track of package structure and individual functionalit
 ## module_name.py
 
 ### name()
-- **Type:** def / class
+- **Type:** function / class
 - **IO:** main_input -> main_output
 - **Status:** ✅ Keep
 - **Purpose:** 
@@ -236,7 +234,7 @@ Internal document to keep track of package structure and individual functionalit
 - **Type:** function
 - **IO:** cube -> subsampled_cube
 - **Status:** ✅ Keep
-- **Purpose:** Subsample / block-average HSI cube
+- **Purpose:** Subsample / block-average HSI cube by possibly cropping it to enforce 'block_size' parameter. Returns mean spectrum per block as a subsampled cube (H/block_size, W/block_size, B).
 - **Notes:**
     - option that doesn't crop the original cube
 
@@ -244,22 +242,23 @@ Internal document to keep track of package structure and individual functionalit
 - **Type:** function
 - **IO:** dict -> X, y
 - **Status:** ✅ Keep
-- **Purpose:** Converts a sample dictionary to X matrix and y label vector
+- **Purpose:** Converts a sample dictionary (either [key:np.ndarray] or [key:list[np.ndarray]]) to X matrix (n_samples, B) and y label vector (n_samples,).
 - **Notes:**
 
 ### snr_per_band()
 - **Type:** function
-- **IO:** cube -> snr
+- **IO:** cube -> snr (np.ndarray)
 - **Status:** ✅ Keep
-- **Purpose:** Computes SNR per band
+- **Purpose:** Computes signal-to-noise ratio (SNR = mean / std) per band with optional valid pixel masking.
 - **Notes:**
 
 ### class_variance_ratio()
 - **Type:** function
-- **IO:** X, y -> ratio
+- **IO:** X, y -> within_var, between_var, ratio
 - **Status:** ✅ Keep
-- **Purpose:** Computes between classes variance, within classes variance and their ratio.
+- **Purpose:** Computes between classes variance, within classes variance and their ratio to indicate discriminative power.
 - **Notes:**
+    - return scatter matrices
 
 ---
 
@@ -268,40 +267,66 @@ Internal document to keep track of package structure and individual functionalit
 [⬅ Back to Overview](#overview)
 
 ### manual_rect_split()
-- **Type:** def / class
-- **IO:** main_input -> main_output
-- **Status:**
-- **Purpose:**
-- **Public methods (for classes):**
+- **Type:** function
+- **IO:** cube -> list of 2D binary masks
+- **Status:** ✅ Keep
+- **Purpose:** Generates a grid of 2D binary masks for rectangular samples in a HSI cube scene. Parameters need to be set manually (sample size, grid shape, start, spacing). Individual masks can be used to extract smaller cubes / spectra. Optional visualization of masking.
 - **Notes:**
-    - comments
-    - new functionality
-    - fixes...
-
-### mask_manual_thresh()
-
+    - Can merge with grid-based spectra extraction (for example optional extraction).
 
 ### mask_top_contrast()
-
-
-### mask_top_contrastV2()
-
+- **Type:** function
+- **IO:** cube -> single 2D binary mask
+- **Status:** ✅ Keep
+- **Purpose:** Computes a foreground mask by *cropping the original cube*, selecting top_n bands with highest contrast (std), boosting contrast, automatic thresholding (Otsu), and combining masks by majority voting. Includes shadow correction and morphological cleaning. Optional visualization.
+- **Notes:**
+    - Also return individual masks (optionally)
+    - Morphological cleaning (optional, improve param parsing, apply to individual masks?)
 
 ### mask_SAM()
-
+- **Type:** function
+- **IO:** cube, reference_spectrum, angle -> single 2D binary mask
+- **Status:** ✅ Keep
+- **Purpose:** Creates a foreground mask using Spectral Angle Mapper (SAM) and optionally automatic thresholding (Otsu). Includes shadow correction and morphological cleaning. Optional visualization of angle map, before cleaning, final mask.
+- **Notes:**
+    - Does Otsu threshold need to be returned?
 
 ### mask_highpass_otsu()
-
+- **Type:** function
+- **IO:** cube, band_idx -> single 2D binary mask
+- **Status:** ❓ Review
+- **Purpose:** Creates a foreground mask using high-pass filtering via Gaussian subtraction and automatic thresholding (Otsu). Detects high-frequency spatial variation (local intensity changes / edges), which is related to texture. Includes morphological cleaning. Optional visualization.
+- **Notes:**
+    - Esentially operates on an image at a single band even though the actual input is a cube.
+    - Possible wrong application of high-pass filtering.
+    - Can add manual thresholding.
+    - Check actual functionality and consider deleting.
 
 ### mask_kmeans()
-
+- **Type:** function
+- **IO:** cube -> single 2D binary mask
+- **Status:** ✅ Keep
+- **Purpose:** Creates a foreground mask using k-means (k=2) on standardized spectra. Includes shadow correction and morphological cleaning. Optional visualization.
+- **Notes:**
+    - Check functionality and processing time.
 
 ### mask_from_pca()
-
+- **Type:** function
+- **IO:** pca_cube, cube -> single 2D binary mask
+- **Status:** ✅ Keep
+- **Purpose:** Creates a foreground mask by selecting the best PC (manual, contrast, std, entropy, otsu) and either use automatic thresholding (Otsu) or boost contrast with manual thresholding. Includes shadow correction and morphological cleaning. Optional visualization.
+- **Notes:**
+    - Need to perform PCA individually, consider integrating it into the function.
+    - Similar to mask_top_contrast - consider merging
 
 ### fixed_rect_extraction()
-
-
+- **Type:** function
+- **IO:** 2D binary mask, sample_size -> list of individual rectangular masks (coords)
+- **Status:** 🚚 Move / ✅ Keep
+- **Purpose:** From a 2D binary mask, find connected components and return fixed-size rectangular masks centered on each object's centroid. Can group and sort either row-wise or column-wise. Optional visualization (numbered masks).
+- **Notes:**
+    - Relatively poor fit with other masking functions in this module - consider moving
+    - Good addition for functions that return a single mask
 
 ---
 
