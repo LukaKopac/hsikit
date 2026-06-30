@@ -88,134 +88,8 @@ def manual_rect_split(
 
     return masks
 
-def mask_manual_thresh(image: NDArray, threshold: float = 0.8, visualize: bool = False) -> NDArray:
-    """
-    Manual threshold operation on a selected image (single band or PCA image).
-    Histogram visualization to simplify the selection of a threshold value.
-
-    Parameters
-    ----------
-    image : NDArray
-        Previously computed image, expected shape (H, W).
-    threshold : float
-        Threshold value in the range [0, 1].
-    visualize : bool
-        Plots the histogram and generated binary mask if True.
-
-    Returns
-    -------
-    NDArray
-        Mask as a 2D boolean array, shape (H, W).
-    """
-    norm = (image - np.min(image)) / (np.max(image) - np.min(image))
-    binary_mask = norm < threshold
-    
-    if visualize:
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-        
-        hist = norm.flatten()
-        axs[0].hist(hist, bins=100)
-        axs[0].grid(True)
-
-        axs[1].imshow(binary_mask, cmap='gray')
-        axs[1].set_title(f"Thresholded image (T = {threshold:.2f})")
-        plt.show()
-    
-    return binary_mask
 
 def mask_top_contrast(
-    cube: NDArray,
-    top_n: int = 5,
-    cont_boost: tuple[float, float] = (0.3, 0.7),
-    shadow_quantile: float = 0.1,
-    min_size: int = 500,
-    hole_size: int = 100,
-    manual_max_band: Optional[int] = None,
-    visualize: bool = False
-) -> NDArray:
-    """
-    Compute a foreground mask by selecting top_n bands with highest contrast,
-    boosting contrast, thresholding, and combining masks by majority voting.
-    
-    Parameters
-    ----------
-    cube : NDArray
-        HSI 3D array, expected shape (H, W, B).
-    top_n : int
-        Number of top contrast bands to use.
-    cont_boost : tuple[float, float]
-        Contrast boosting limits, both in the range [0, 1].
-    shadow_quantile : float
-        A quantile of pixels with low values (shadow pixels) in the range [0, 1].
-    min_size : int
-        The minimum number of pixels for small objects removal (remove area if < min_size).
-    hole_size : int
-        Maximum hole size to fill for small holes removal (fill hole if < hole_size).
-    manual_max_band : Optional[int]
-        Optional index of maximum band to check for contrast.
-    visualize: bool
-        Plot intermediate results if True.
-    
-    Returns
-    -------
-    NDArray
-        Mask as a 2D boolean array, shape (H, W).
-    """
-    low, high = cont_boost
-
-    def contrast(img):
-        norm = (img - img.min()) / (img.max() - img.min())
-        return norm.std()
-
-    def boost(img):
-        img = np.clip((img - low) / (high - low), 0, 1)
-        return img
-
-    if manual_max_band is not None:
-        num_bands = manual_max_band
-    else:
-        num_bands = cube.shape[2]
-        
-    contrast_vals = np.zeros(num_bands)
-
-    for b in range(num_bands):
-        contrast_vals[b] = contrast(cube[:, :, b])
-
-    top_indices = contrast_vals.argsort()[-top_n:][::-1]
-    masks = []
-
-    for idx in top_indices:
-        band = cube[..., idx]
-        norm_band = (band - band.min()) / (band.max() - band.min())
-        contrast_band = boost(norm_band)
-
-        p_low = np.quantile(contrast_band, shadow_quantile)
-        contrast_band[contrast_band < p_low] = 0
-        
-        thresh = threshold_otsu(contrast_band)
-        mask = contrast_band > thresh
-        masks.append(mask)
-
-    combined_mask = np.sum(masks, axis=0) > (top_n // 2)
-    combined_mask = remove_small_objects(combined_mask, max_size=min_size)
-    combined_mask = remove_small_holes(combined_mask, max_size=hole_size)
-
-    if visualize:
-        fig, ax = plt.subplots(1, top_n + 1, figsize=(4 * (top_n + 1), 4))
-        for i, idx in enumerate(top_indices):
-            ax[i].imshow(cube[..., idx], cmap='gray')
-            ax[i].set_title(f'Band {idx}')
-            ax[i].axis('off')
-            ax[i].imshow(masks[i], cmap='Reds', alpha=0.3)
-        ax[-1].imshow(combined_mask, cmap='gray')
-        ax[-1].set_title('Combined mask')
-        ax[-1].axis('off')
-        plt.tight_layout()
-        plt.show()
-
-    return combined_mask
-
-def mask_top_contrastV2(
     cube: NDArray,
     top_n: int = 5,
     cont_boost: tuple[float, float] = (0.3, 0.7),
@@ -279,26 +153,36 @@ def mask_top_contrastV2(
     else:
         num_bands = hs_crop.shape[2]
         
+    # Select bands with highest contrast
     contrast_vals = np.zeros(num_bands)
     for b in range(num_bands):
         contrast_vals[b] = contrast(hs_crop[:, :, b])
-
+    
     top_indices = contrast_vals.argsort()[-top_n:][::-1]
+    
+    # Compute masks
     masks = []
 
     for idx in top_indices:
         band = hs_crop[..., idx]
+
+        # Boost contrast
         norm_band = (band - band.min()) / (band.max() - band.min())
         contrast_band = boost(norm_band)
 
+        # Shadow correction
         p_low = np.quantile(contrast_band, shadow_quantile)
         contrast_band[contrast_band < p_low] = 0
         
+        # Automatic thresholding (Otsu)
         thresh = threshold_otsu(contrast_band)
         mask = contrast_band > thresh
         masks.append(mask)
 
+    # Combine masks
     combined_crop_mask = np.sum(masks, axis=0) > (top_n // 2)
+
+    # Morphological cleaning
     combined_crop_mask = remove_small_objects(combined_crop_mask, max_size=min_size)
     combined_crop_mask = remove_small_holes(combined_crop_mask, max_size=hole_size)
 
@@ -306,6 +190,7 @@ def mask_top_contrastV2(
     combined_mask = np.zeros(original_shape, dtype=bool)
     combined_mask[ycrop:original_shape[0]-ycrop, xcrop:original_shape[1]-xcrop] = combined_crop_mask
 
+    # Visualization
     if visualize:
         fig, ax = plt.subplots(1, top_n + 1, figsize=(4 * (top_n + 1), 4))
         for i, idx in enumerate(top_indices):
