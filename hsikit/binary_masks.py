@@ -31,7 +31,8 @@ def manual_rect_split(
     visualize: bool = False
 ) -> list[NDArray]:
     """
-    Generate binary masks for rectangular samples in a HSI scene.
+    Generate a grid of masks for rectangular samples in a HSI cube.  
+    Returns a list of 2D binary masks.
 
     Parameters
     ----------
@@ -87,15 +88,15 @@ def manual_rect_split(
 
     return masks
 
-def mask_manual_pca_thresh(pca_image: NDArray, threshold: float = 0.8, visualize: bool = False) -> NDArray:
+def mask_manual_thresh(image: NDArray, threshold: float = 0.8, visualize: bool = False) -> NDArray:
     """
-    Manual threshold operation on a selected PCA image.
+    Manual threshold operation on a selected image (single band or PCA image).
     Histogram visualization to simplify the selection of a threshold value.
 
     Parameters
     ----------
-    pca_image : NDArray
-        Previously computed PCA image, expected shape (H, W).
+    image : NDArray
+        Previously computed image, expected shape (H, W).
     threshold : float
         Threshold value in the range [0, 1].
     visualize : bool
@@ -106,18 +107,18 @@ def mask_manual_pca_thresh(pca_image: NDArray, threshold: float = 0.8, visualize
     NDArray
         Mask as a 2D boolean array, shape (H, W).
     """
-    pc_norm = (pca_image - np.min(pca_image)) / (np.max(pca_image) - np.min(pca_image))
-    binary_mask = pc_norm < threshold
+    norm = (image - np.min(image)) / (np.max(image) - np.min(image))
+    binary_mask = norm < threshold
     
     if visualize:
         fig, axs = plt.subplots(1, 2, figsize=(10, 5))
         
-        pc_hist = pc_norm.flatten()
-        axs[0].hist(pc_hist, bins=100)
+        hist = norm.flatten()
+        axs[0].hist(hist, bins=100)
         axs[0].grid(True)
 
         axs[1].imshow(binary_mask, cmap='gray')
-        axs[1].set_title(f"Thresholded PC (T = {threshold:.2f})")
+        axs[1].set_title(f"Thresholded image (T = {threshold:.2f})")
         plt.show()
     
     return binary_mask

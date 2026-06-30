@@ -2,7 +2,7 @@
 General utility functions:
 - block_average_cube (subsample HSI cube, aggregates individual spatial pixels)
 - dict2Xy (converts a dictionary to X matrix and y vector)
-- compute_snr_per_band (signal to noise ratio per band)
+- snr_per_band (signal to noise ratio per band)
 - class_variance_ratio (between classes to within classes variance ratio)
 
 Note: This module is under active development and may change.
@@ -13,7 +13,7 @@ import numpy as np
 # Block average a cube
 def block_average_cube(cube: np.ndarray, block_size: int = 5) -> np.ndarray:
     """
-    Subsamples / block averages a cube.
+    Subsamples / block averages a cube.  
     The cube is cropped in the process to enforce 'block_size' parameter (if cube shape not divisible by it).
 
     Parameters
@@ -89,9 +89,10 @@ def dict2Xy(sample_dictionary: dict[str, list[np.ndarray] | np.ndarray]) -> tupl
     return np.vstack(X), np.array(y)
 
 # Signal to noise ratio per band
-def compute_snr_per_band(cube: np.ndarray, mask: None | np.ndarray = None) -> np.ndarray:
+def snr_per_band(cube: np.ndarray, mask: None | np.ndarray = None) -> np.ndarray:
     """
     Compute SNR (signal-to-noise ratio) per band after optionally masking bad pixels.
+    SNR = mean / std
     
     Parameters
     ----------
