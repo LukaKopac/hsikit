@@ -5,7 +5,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-### [Base utilities (base_utils.py)](base_utilspy)
+### [Base utilities (base_utils.py)](#base_utilspy)
 
 **Purpose:** General utility and helper functions.
 
