@@ -5,7 +5,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-### [Base utilities (base_utils.py)](#base_utilspy)
+### [Base utilities (base_utils.py)](base_utilspy)
 
 **Purpose:** General utility and helper functions.
 
@@ -204,29 +204,9 @@ Internal document to keep track of package structure and individual functionalit
 
 # Function Inventory
 
-**Status legend:**
-- ✅ Keep
-- 🔄 Refactor
-- 🚚 Move
-- ❓ Review
-- ❌ Remove
-
-**Template:**
-
-## module_name.py
-
-### name()
-- **Type:** function / class
-- **IO:** main_input -> main_output
-- **Status:** ✅ Keep
-- **Purpose:** 
-- **Key methods (for classes):**
-- **Dependencies:**
-- **Notes:**
-
 ---
 
-# 📦 Module: base_utils.py
+# base_utils.py
 
 [⬅ Back to Overview](#overview)
 
@@ -243,14 +223,12 @@ Internal document to keep track of package structure and individual functionalit
 - **IO:** dict -> X, y
 - **Status:** ✅ Keep
 - **Purpose:** Converts a sample dictionary (either [key:np.ndarray] or [key:list[np.ndarray]]) to X matrix (n_samples, B) and y label vector (n_samples,).
-- **Notes:**
 
 ### snr_per_band()
 - **Type:** function
 - **IO:** cube -> snr (np.ndarray)
 - **Status:** ✅ Keep
 - **Purpose:** Computes signal-to-noise ratio (SNR = mean / std) per band with optional valid pixel masking.
-- **Notes:**
 
 ### class_variance_ratio()
 - **Type:** function
@@ -262,7 +240,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 Module: binary_masks.py
+# binary_masks.py
 
 [⬅ Back to Overview](#overview)
 
@@ -330,32 +308,72 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 Module: cleaning.py
+# cleaning.py
 
 [⬅ Back to Overview](#overview)
 
 ### DeadPixelProcessor
-
+- **Type:** class
+- **IO:** cube -> repaired cube
+- **Status:** ✅ Keep
+- **Purpose:** High level API for all functions responsible for dealing with and handling defects and dead pixels. Combines identification and interpolation into single command.
+- **Key methods:**
+    - clean()
+- **Dependencies:** Depends on *identify_dead_pixels()* and *interpolate_dead_pixels()*
+- **Notes:**
+    - Is returning a mask of repaired pixels useful? Consider removing.
+    - Indicate private methods: _name()
 
 ### detect_dead_and_outlier_pixels()
-
+- **Type:** function
+- **IO:** cube -> 2D binary defect mask
+- **Status:** ❓ Review
+- **Purpose:** Detects dead pixels and outliers in a HSI cube. Dead pixel detection based on *manual thresholding* and outlier detection based on *z-score per band* (z_thresh in std units).
+- - **Notes:**
+    - Check usefulness and uniqueness
+    - Consider merging all defect detection methods into one
+    - Standardize mask dimensions (either 2D or 3D)
 
 ### detect_line_defects()
-
+- **Type:** function
+- **IO:** cube -> 3D binary defect mask, defect locations
+- **Status:** ❓ Review
+- **Purpose:** Detects defects where most *rows* at (col,band) are *extreme outliers*. Computes a z-score across columns band-by-band; columns with high z indicate anomaly. Then checks whether most rows are extreme relative to per-row deviation at that (col,band).
+- - **Notes:**
+    - Consider merging all defect detection methods into one
+    - Standardize mask dimensions (either 2D or 3D)
 
 ### identify_dead_pixels()
-
+- **Type:** function
+- **IO:** cube -> 2D/3D binary defect masks, defect locations
+- **Status:** ❓ Review
+- **Purpose:** Identifies dead pixel locations (column and band index) based on *median filter deviation* and threshold. Optional visualization.
+- **Notes:**
+    - Too many returns - are both 2D and 3D mask really necessary? Group band_idx and col_idx into one return.
+    - Consider merging all defect detection methods into one
+    - Standardize mask dimensions (either 2D or 3D)
 
 ### interpolate_dead_pixels()
-
+- **Type:** function
+- **IO:** cube, 3D binary defect mask -> repaired cube
+- **Status:** ✅ Keep
+- **Purpose:** Interpolate and repair dead pixels in a HSI cube. Either 'spectral', 'spatial' or 'hybrid' method. Shifts cube and mask by one to both sides and takes median of neighbours to interpolate new value. Hybrid method combines both approaches. Also returns a mask of repaired pixels.
+- **Notes:**
+    - Is returning a mask of repaired pixels useful? Consider removing.
+    - Standardize mask dimensions (either 2D or 3D)
 
 ### plot_defect_summary()
-
-
+- **Type:** function
+- **IO:** cube, 3D binary defect mask -> diagnostic plots/visualizations
+- **Status:** ❓ Review
+- **Purpose:** Visualize diagnostic plots and images. Image of defect locations summed across bands (vertical lines) and plot of example slice with defect overlay. If defects_list is provided also prints locations.
+- **Notes:**
+    - Check usefulness
+    - Consider deleting
 
 ---
 
-# 📦 Module: extractors.py
+# extractors.py
 
 [⬅ Back to Overview](#overview)
 
@@ -370,7 +388,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 Module: feature_selection.py
+# feature_selection.py
 
 [⬅ Back to Overview](#overview)
 
@@ -397,7 +415,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 Module: hsi_io.py
+# hsi_io.py
 
 [⬅ Back to Overview](#overview)
 
@@ -421,7 +439,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 Module: masking_utility.py
+# masking_utility.py
 
 [⬅ Back to Overview](#overview)
 
@@ -448,7 +466,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 Module: preprocessing.py
+# preprocessing.py
 
 [⬅ Back to Overview](#overview)
 
@@ -470,7 +488,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 Module: sandbox.py
+# sandbox.py
 
 [⬅ Back to Overview](#overview)
 
@@ -498,7 +516,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 Module: pipeline.py
+# pipeline.py
 
 [⬅ Back to Overview](#overview)
 
@@ -514,7 +532,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦Module: visualizations.py
+# visualizations.py
 
 [⬅ Back to Overview](#overview)
 
@@ -535,3 +553,23 @@ Internal document to keep track of package structure and individual functionalit
 
 ### plot_hsi_cube()
 
+---
+**Status legend:**
+- ✅ Keep
+- 🔄 Refactor
+- 🚚 Move
+- ❓ Review
+- ❌ Remove
+
+**Template:**
+
+## module_name.py
+
+### name()
+- **Type:** function / class
+- **IO:** main_input -> main_output
+- **Status:** ✅ Keep
+- **Purpose:** 
+- **Key methods (for classes):**
+- **Dependencies:**
+- **Notes:**
