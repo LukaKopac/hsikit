@@ -11,7 +11,7 @@ import re
 import os
 
 from hsikit.hsi_io import load_hsi_batch, find_hsi_basepaths, load_sample_mapping, load_hsi_raw, load_wavelengths
-from hsikit.binary_masks import mask_top_contrast, mask_top_contrastV2, fixed_rect_extraction
+from hsikit.binary_masks import mask_top_contrast, fixed_rect_extraction
 from hsikit.masking_utility import extract_sample_cubes_from_masks
 
 
