@@ -15,7 +15,7 @@ from pathlib import Path
 
 def find_hsi_basepaths(root_folder: str, suffix: str = "_refl") -> list[str]:
     """
-    Finds HSI basepaths in a parent/root folder. Compatible with load_hsi_raw function.
+    Finds HSI basepaths in a parent/root folder. Compatible with load_hsi_raw() and used in load_hsi_batch().
 
     Parameters
     ----------
@@ -44,7 +44,12 @@ def find_hsi_basepaths(root_folder: str, suffix: str = "_refl") -> list[str]:
                     basepaths.append(full_path)
     return basepaths
 
-def load_hsi_raw(base_path: str, return_metadata: bool = False, scale_to_reflectance: bool = True, verbose: bool = False) -> NDArray | tuple[NDArray, dict]:
+def load_hsi_raw(
+        base_path: str,
+        return_metadata: bool = False, 
+        scale_to_reflectance: bool = True, 
+        verbose: bool = False
+    ) -> NDArray | tuple[NDArray, dict]:
     """
     Loads a hyperspectral data cube from a .raw + .hdr pair.
 
@@ -162,6 +167,7 @@ def load_sample_mapping(txt_path: str) -> dict[str, list[str]]:
     ---------------
     scene01: sp1, sp2, sp3...
     scene02: sp4, sp5, sp6...
+    ...
     
     Parameters
     ----------
@@ -183,14 +189,16 @@ def load_sample_mapping(txt_path: str) -> dict[str, list[str]]:
                 mapping[scene.strip()] = species
     return mapping
 
-def load_hsi_batch(root_folder: str,
-                   suffix: str = "refl",
-                   return_metadata: bool = False,
-                   return_wavelengths: bool = False,
-                   return_names: bool = False
-) -> dict[str, object]:
+def load_hsi_batch(
+        root_folder: str,
+        suffix: str = "_refl",
+        return_metadata: bool = False,
+        return_wavelengths: bool = False,
+        return_names: bool = False,
+        verbose: bool = True
+    ) -> dict[str, object]:
     """
-    Batch-loads all hypersprectral cubes from a folder.
+    Batch-loads all hypersprectral cubes from a folder and returns a dictionary containing loaded data, along with optional metadata.
     
     Parameters
     ----------
@@ -204,23 +212,31 @@ def load_hsi_batch(root_folder: str,
         if True, include wavelengths from the first .hdr.
     return_names : bool
         if True, include list of cube names.
+    verbose : bool
+        if True, prints the loaded files and their shape.
 
     Returns
     -------
     dict
-        {
-            "cubes": list[NDArray],
-            "metadata": dict[str, dict] | None,
-            "wavelengths": NDArray | None,
-            "names": list[str] | None
-        }
+        Dictionary with the following keys:
+
+        ``"cubes"``
+            List of loaded hyperspectral cubes.
+
+        ``"metadata"``, optional
+            Metadata for each cube. Included only if ``return_metadata=True``.
+
+        ``"wavelengths"``, optional
+            Wavelength vector from the first cube. Included only if ``return_wavelengths=True``.
+
+        ``"names"``, optional
+            Cube filenames without extensions. Included only if ``return_names=True``.
     """
     basepaths = find_hsi_basepaths(root_folder, suffix=suffix)
 
     cubes = []
     names = []
-    metadata_dict = {} if return_metadata else None
-    wavelengths = None
+    metadata_dict = {}
 
     for base in basepaths:
         filename = Path(base).stem
@@ -228,29 +244,31 @@ def load_hsi_batch(root_folder: str,
         
         if return_metadata:
             cube, meta = load_hsi_raw(base, return_metadata=True)
-            assert metadata_dict is not None
             metadata_dict[filename] = meta
         else:
             cube = load_hsi_raw(base, return_metadata=False)
             assert isinstance(cube, np.ndarray)
 
         cubes.append(cube)
-        print(f"Loaded {filename} {cube.shape}")
+        if verbose:
+            print(f"Loaded {filename} {cube.shape}")
+
+    result: dict[str, object] = {"cubes": cubes}
+
+    if return_metadata:
+        result["metadata"] = metadata_dict
 
     if return_wavelengths and basepaths:
-        hdr_path = basepaths[0] + ".hdr"
-        wavelengths = load_wavelengths(hdr_path)
+        result["wavelengths"] = load_wavelengths(basepaths[0] + ".hdr")
 
-    return {
-        "cubes": cubes,
-        "metadata": metadata_dict,
-        "wavelengths": wavelengths if return_wavelengths else None,
-        "names": names if return_names else None
-    }
+    if return_names:
+        result["names"] = names
+
+    return result
 
 def export_tiff_stack(cube: NDArray, filename: str, verbose: bool = True) -> None:
     """
-    Exports hyperspectral cube as a TIFF stack.
+    Exports hyperspectral cube as a TIFF stack of images.
 
     Parameters
     ----------
