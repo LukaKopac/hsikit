@@ -226,7 +226,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-## base_utils.py
+# 📦 Module: base_utils.py
 
 [⬅ Back to Overview](#overview)
 
@@ -262,7 +262,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 binary_masks.py
+# 📦 Module: binary_masks.py
 
 [⬅ Back to Overview](#overview)
 
@@ -330,7 +330,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 cleaning.py
+# 📦 Module: cleaning.py
 
 [⬅ Back to Overview](#overview)
 
@@ -355,7 +355,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 extractors.py
+# 📦 Module: extractors.py
 
 [⬅ Back to Overview](#overview)
 
@@ -370,7 +370,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 feature_selection.py
+# 📦 Module: feature_selection.py
 
 [⬅ Back to Overview](#overview)
 
@@ -397,7 +397,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 hsi_io.py
+# 📦 Module: hsi_io.py
 
 [⬅ Back to Overview](#overview)
 
@@ -421,7 +421,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 masking_utility.py
+# 📦 Module: masking_utility.py
 
 [⬅ Back to Overview](#overview)
 
@@ -448,7 +448,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 preprocessing.py
+# 📦 Module: preprocessing.py
 
 [⬅ Back to Overview](#overview)
 
@@ -470,7 +470,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 sandbox.py
+# 📦 Module: sandbox.py
 
 [⬅ Back to Overview](#overview)
 
@@ -498,7 +498,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 pipeline.py
+# 📦 Module: pipeline.py
 
 [⬅ Back to Overview](#overview)
 
@@ -514,7 +514,7 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
-# 📦 visualizations.py
+# 📦Module: visualizations.py
 
 [⬅ Back to Overview](#overview)
 
