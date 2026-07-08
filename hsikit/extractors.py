@@ -87,20 +87,20 @@ def extract_local_mean(
 
 
 # ---------- Extract median/mean spectra per rectangle grid-based ROIs --------------
-def Grid_ROI_extractor(
+def extract_grid_roi_spectra(
     cube: NDArray,
     start: int | tuple[int, int],
     roi_size: int | tuple[int, int],
     gap: int | tuple[int, int],
     n_rois: int | tuple[int, int],
     statistic: Literal['median', 'mean'] = 'median',
-    ignore_nan: bool = True,
+    order: Literal['row', 'column'] = 'column',
     band_for_display: Optional[int] = None,
     ax: Optional[Axes] = None,
     visualize: bool = True,
 ) -> tuple[np.ndarray, list[tuple[int, int, int, int]]]:
     """
-    Extracts ROIs column-wise.
+    Extract median/mean spectra per rectangle grid-based ROIs either row or column-wise.
     
     Parameters
     ----------
@@ -121,6 +121,10 @@ def Grid_ROI_extractor(
         Number of ROIs vertically and horizontally
         If int -> same number of ROIs
         If tuple -> (n_rows, n_cols)
+    statistic : Literal['median', 'mean']
+        Statistic to use to aggregate spectra. Either 'median' or 'mean', default is 'median'
+    order : Literal['row', 'column']
+        Extraction order. Either 'row' or 'column', default is 'column'
     band_for_display : Optional[int]
         Band index to visualize; if None, mean over bands
     ax : Optional[Axes]
@@ -133,7 +137,7 @@ def Grid_ROI_extractor(
     spectra : ndarray (N_rois, B)
         Median spectrum per ROI
     roi_coords : list of tuples
-        (r0, r1, c0, c1) for each ROI
+        (c0, r0, c1, r1) for each ROI
     """
 
     H, W, B = cube.shape
@@ -146,9 +150,9 @@ def Grid_ROI_extractor(
 
     # --- statistic ---
     if statistic.lower() == "mean":
-        stat_func = np.nanmean if ignore_nan else np.mean
+        stat_func = np.mean
     elif statistic.lower() == "median":
-        stat_func = np.nanmedian if ignore_nan else np.median
+        stat_func = np.median
     else:
         raise ValueError("statistic must be 'mean' or 'median'")
 
@@ -167,32 +171,39 @@ def Grid_ROI_extractor(
         _ax.axis("off")
 
     # --- main loop ---
-    for j in range(n_cols):
-        for i in range(n_rows):
-            r0 = start_row + i * (roi_h + row_gap)
-            c0 = start_col + j * (roi_w + col_gap)
-            r1 = r0 + roi_h
-            c1 = c0 + roi_w
+    if order == "row":
+        iterator = ((i, j) for i in range(n_rows) for j in range(n_cols))
+    elif order == "column":
+        iterator = ((i, j) for j in range(n_cols) for i in range(n_rows))
+    else:
+        raise ValueError("order must be 'row' or 'column'")
 
-            if r1 > H or c1 > W:
-                continue
+    for idx, (i, j) in enumerate(iterator):
+        r0 = start_row + i * (roi_h + row_gap)
+        c0 = start_col + j * (roi_w + col_gap)
+        r1 = r0 + roi_h
+        c1 = c0 + roi_w
 
-            roi = cube[r0:r1, c0:c1, :]
-            spectrum = stat_func(roi, axis=(0, 1))
+        if r1 > H or c1 > W:
+            continue
 
-            spectra.append(spectrum)
-            roi_coords.append((c0, r0, c1, r1))
+        roi = cube[r0:r1, c0:c1, :]
+        spectrum = stat_func(roi, axis=(0, 1))
 
-            if visualize:
-                rect = Rectangle(
-                    (c0, r0),
-                    roi_w,
-                    roi_h,
-                    linewidth=1.5,
-                    edgecolor="red",
-                    facecolor="none",
-                )
-                _ax.add_patch(rect)
+        spectra.append(spectrum)
+        roi_coords.append((i, j, c0, r0, c1, r1))
+
+        if visualize:
+            rect = Rectangle(
+                (c0, r0),
+                roi_w,
+                roi_h,
+                linewidth=1.5,
+                edgecolor="red",
+                facecolor="none",
+            )
+            _ax.add_patch(rect)
+            _ax.text(c0 + roi_w / 2, r0 + roi_h / 2, str(idx), color="red", fontsize=8, ha="center", va="center")
 
     return np.array(spectra), roi_coords
 
