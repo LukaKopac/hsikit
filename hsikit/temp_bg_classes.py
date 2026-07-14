@@ -424,7 +424,7 @@ class HSIProcessorV2:
 
     def _compute_masks(self, min_size=1800, crop=(0,0), manual_max_band=None, visualize=False):
         self.masks = [
-            mask_top_contrastV2(c, min_size=min_size, crop=crop, manual_max_band=manual_max_band, visualize=visualize, title=name)
+            mask_top_contrast(c, min_size=min_size, crop=crop, manual_max_band=manual_max_band, visualize=visualize, title=name)
             for c, name in zip(self.cubes, self.cube_names)
         ]
         return self
