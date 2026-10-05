@@ -4,11 +4,15 @@ General utility functions:
 - dict2Xy (converts a dictionary to X matrix and y vector)
 - snr_per_band (signal to noise ratio per band)
 - class_variance_ratio (between classes to within classes variance ratio)
+- spectral_outlier_analysis (Mahalanobis distance VS Orthogonal distance for outlier detection)
 
 Note: This module is under active development and may change.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.covariance import EmpiricalCovariance
 
 # Block average a cube
 def block_average_cube(cube: np.ndarray, block_size: int = 5) -> np.ndarray:
@@ -159,3 +163,189 @@ def class_variance_ratio(X: np.ndarray, y: np.ndarray) -> tuple[float, float, fl
     
     ratio = between_var / within_var
     return within_var, between_var, ratio
+
+# Spectral outliers: Mahalanobis distance VS Orthogonal distance
+def spectral_outlier_analysis(
+    X,
+    sample_labels,
+    n_components=10,
+    md_threshold=None,
+    od_threshold=None,
+    md_percentile=99.5,
+    od_percentile=99.5,
+    figsize=(8, 6),
+    alpha=0.4,
+):
+    """
+    PCA-based spectral outlier detection using Mahalanobis distance (MD)
+    and orthogonal distance (OD).
+
+    Parameters
+    ----------
+    X : ndarray, shape (n_spectra, n_bands)
+        Spectral data.
+
+    sample_labels : array-like, shape (n_spectra,)
+        Sample/individual labels for each spectrum.
+
+    n_components : int, default=10
+        Number of PCA components used.
+
+    md_threshold : float or None
+        Explicit Mahalanobis-distance threshold.
+        If None, md_percentile is used.
+
+    od_threshold : float or None
+        Explicit orthogonal-distance threshold.
+        If None, od_percentile is used.
+
+    md_percentile : float, default=99.5
+        Percentile used to determine MD threshold if md_threshold is None.
+
+    od_percentile : float, default=99.5
+        Percentile used to determine OD threshold if od_threshold is None.
+
+    figsize : tuple, default=(8, 6)
+        Figure size.
+
+    alpha : float, default=0.4
+        Scatter point transparency.
+
+    Returns
+    -------
+    results : dict
+        Dictionary containing PCA model, distances, thresholds,
+        and outlier masks.
+    fig : matplotlib.figure.Figure
+        Figure containing the MD vs OD plot.
+    ax : matplotlib.axes.Axes
+        Plot axes.
+    """
+
+    X = np.asarray(X)
+    sample_labels = np.asarray(sample_labels)
+
+    if X.ndim != 2:
+        raise ValueError("X must have shape (n_spectra, n_bands).")
+
+    if len(X) != len(sample_labels):
+        raise ValueError("X and sample_labels must contain the same number of spectra.")
+
+    # ------------------------------------------------------------------
+    # PCA
+    # ------------------------------------------------------------------
+
+    pca = PCA(n_components=n_components)
+    scores = pca.fit_transform(X)
+
+    # ------------------------------------------------------------------
+    # Mahalanobis distance in PCA score space
+    # ------------------------------------------------------------------
+
+    covariance = EmpiricalCovariance().fit(scores)
+
+    md = np.sqrt(covariance.mahalanobis(scores))
+
+    # ------------------------------------------------------------------
+    # Orthogonal distance
+    #
+    # Reconstruct spectra from the retained PCA components and calculate
+    # the Euclidean distance between the original and reconstructed spectra.
+    # ------------------------------------------------------------------
+
+    X_reconstructed = pca.inverse_transform(scores)
+
+    residuals = X - X_reconstructed
+
+    od = np.linalg.norm(residuals, axis=1)
+
+    # ------------------------------------------------------------------
+    # Determine thresholds
+    # ------------------------------------------------------------------
+
+    if md_threshold is None:
+        md_threshold = np.percentile(md, md_percentile)
+
+    if od_threshold is None:
+        od_threshold = np.percentile(od, od_percentile)
+
+    # ------------------------------------------------------------------
+    # Outlier masks
+    # ------------------------------------------------------------------
+
+    md_outlier = md > md_threshold
+    od_outlier = od > od_threshold
+
+    # Either distance indicates an outlier
+    outlier = md_outlier | od_outlier
+
+    # Both distances indicate an outlier
+    joint_outlier = md_outlier & od_outlier
+
+    # ------------------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------------------
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    unique_labels = np.unique(sample_labels)
+
+    for label in unique_labels:
+        idx = sample_labels == label
+
+        ax.scatter(
+            md[idx],
+            od[idx],
+            alpha=alpha,
+            s=15,
+            label=str(label),
+        )
+
+    # Thresholds
+    ax.axvline(
+        md_threshold,
+        linestyle="--",
+        linewidth=1.2,
+        color="black",
+    )
+
+    ax.axhline(
+        od_threshold,
+        linestyle="--",
+        linewidth=1.2,
+        color="black",
+    )
+
+    ax.set_xlabel("Mahalanobis distance")
+    ax.set_ylabel("Orthogonal distance")
+
+    ax.set_title("Spectral outlier detection")
+
+    ax.legend(
+        title="Sample",
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left",
+    )
+
+    fig.tight_layout()
+
+    # ------------------------------------------------------------------
+    # Results
+    # ------------------------------------------------------------------
+
+    results = {
+        "pca": pca,
+        "scores": scores,
+        "reconstructed": X_reconstructed,
+        "mahalanobis": md,
+        "orthogonal": od,
+        "md_threshold": md_threshold,
+        "od_threshold": od_threshold,
+        "md_outlier": md_outlier,
+        "od_outlier": od_outlier,
+        "outlier": outlier,
+        "joint_outlier": joint_outlier,
+        "sample_labels": sample_labels,
+    }
+
+    return results, fig, ax
