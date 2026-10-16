@@ -639,7 +639,7 @@ def rect_extraction(
     margin: int = 0,
     min_area: int = 10,
     fallback_dims: tuple[int, int] = (32, 32),
-) -> tuple[list, list]:
+) -> tuple[list, list[tuple[int, int]], list[tuple[int, int]]]:
     """
     Extract fixed-size rectangular masks centered on connected components.
 
@@ -676,8 +676,8 @@ def rect_extraction(
 
     Returns
     -------
-    tuple[list, list]
-        (sorted rectangular masks, sorted (top, left) coordinates).
+    tuple
+        Sorted rectangular masks, sorted (top, left) coordinates, sorted (height, width) dimensions.
     """
     if binary_mask.ndim != 2:
         raise ValueError("binary_mask must be a 2D array.")
@@ -907,4 +907,4 @@ def rect_extraction(
         ax.axis("off")
         plt.show()
 
-    return masks_list_sorted, coords_list_sorted
+    return masks_list_sorted, coords_list_sorted, dims_list_sorted
