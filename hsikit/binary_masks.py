@@ -635,6 +635,7 @@ def rect_extraction(
     min_frac: float = 0.9,
     visualize: bool = True,
     *,
+    return_masks: bool = True,
     auto_size_mode: Literal["min", "minmin", "fit_all"] = "min",
     margin: int = 0,
     min_area: int = 10,
@@ -658,6 +659,8 @@ def rect_extraction(
         Minimum fraction of foreground pixels required inside each rectangle.
     visualize : bool
         Plot the extracted rectangles if True.
+    return_masks : bool
+        Calculate and return masks if True, else return empty list
     auto_size_mode : Literal["min", "minmin", "fit_all"]
         Automatic sizing strategy:
         - "min": independently minimize height and width across components.
@@ -677,7 +680,9 @@ def rect_extraction(
     Returns
     -------
     tuple
-        Sorted rectangular masks, sorted (top, left) coordinates, sorted (height, width) dimensions.
+        Sorted rectangular masks (empty if return_masks is True),  
+        sorted (top, left) coordinates,  
+        sorted (height, width) dimensions.
     """
     if binary_mask.ndim != 2:
         raise ValueError("binary_mask must be a 2D array.")
@@ -810,10 +815,11 @@ def rect_extraction(
         if frac_true < min_frac:
             continue
     
-        rect_mask = np.zeros_like(binary_mask, dtype=bool)
-        rect_mask[top:bottom, left:right] = True
-    
-        masks_list.append(rect_mask)
+        if return_masks:
+            rect_mask = np.zeros_like(binary_mask, dtype=bool)
+            rect_mask[top:bottom, left:right] = True
+            masks_list.append(rect_mask)
+        
         coords_list.append((top, left))
         dims_list.append((rect_height, rect_width))
 
@@ -841,7 +847,9 @@ def rect_extraction(
         sorted_indices = np.argsort(coords_array[:, group_axis])
     
         items = [
-            (coords_list[i], masks_list[i], dims_list[i])
+            (coords_list[i], 
+             masks_list[i] if return_masks else None, 
+             dims_list[i])
             for i in sorted_indices
         ]
     
@@ -869,8 +877,13 @@ def rect_extraction(
             )
     
         coords_list_sorted = [item[0] for item in sorted_items]
-        masks_list_sorted = [item[1] for item in sorted_items]
         dims_list_sorted = [item[2] for item in sorted_items]
+
+        masks_list_sorted = (
+            [item[1] for item in sorted_items]
+            if return_masks
+            else []
+        )
     
     else:
         coords_list_sorted, masks_list_sorted, dims_list_sorted = [], [], []
