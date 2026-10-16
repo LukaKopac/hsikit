@@ -11,7 +11,7 @@ import re
 import os
 
 from hsikit.hsi_io import load_hsi_batch, find_hsi_basepaths, load_sample_mapping, load_hsi_raw, load_wavelengths
-from hsikit.binary_masks import mask_top_contrast, fixed_rect_extraction
+from hsikit.binary_masks import mask_top_contrast, rect_extraction
 from hsikit.masking_utility import extract_sample_cubes_from_masks
 
 
@@ -220,7 +220,7 @@ class HSIProcessor:
         self.rect_masks = []
         self.coords = []
         for mask in self.masks:
-            rects, coords = fixed_rect_extraction(mask, (width, height), mode='column', min_frac=min_frac)
+            rects, coords = rect_extraction(mask, (width, height), mode='column', min_frac=min_frac)
             self.rect_masks.append(rects)
             self.coords.append(coords)
         return self
@@ -433,7 +433,7 @@ class HSIProcessorV2:
         self.rect_masks = []
         self.coords = []
         for mask in self.masks:
-            rects, coords = fixed_rect_extraction(mask, (width, height), mode='column', min_frac=min_frac, visualize=visualize)
+            rects, coords = rect_extraction(mask, (width, height), mode='column', min_frac=min_frac, visualize=visualize)
             self.rect_masks.append(rects)
             self.coords.append(coords)
         return self
