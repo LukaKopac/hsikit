@@ -6,6 +6,7 @@ This module provides helper functions for producing binary masks using various f
 Note: This module is under active development and may change.
 """
 
+import warnings
 import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
@@ -627,131 +628,283 @@ def mask_from_pca(
     
     return binary_mask
 
-def fixed_rect_extraction(
+def rect_extraction(
     binary_mask: NDArray,
-    rect_dims: tuple[int, int],
-    mode: Literal['row', 'column'] = 'column',
+    rect_dims: tuple[int, int] | None = None,
+    mode: Literal["row", "column"] = "column",
     min_frac: float = 0.9,
-    visualize: bool = True
+    visualize: bool = True,
+    *,
+    auto_size_mode: Literal["min", "minmin", "fit_all"] = "min",
+    margin: int = 0,
+    min_area: int = 10,
+    fallback_dims: tuple[int, int] = (32, 32),
 ) -> tuple[list, list]:
     """
-    From a binary mask, find connected components and return fixed-size
-    rectangular masks centered on each object's centroid.
+    Extract fixed-size rectangular masks centered on connected components.
 
-    Can group and sort either row-wise or column-wise.
+    Rectangle dimensions can be provided manually or inferred automatically
+    from the component bounding boxes.
 
     Parameters
     ----------
     binary_mask : NDArray
         Base binary mask.
-    rect_dims : tuple[int, int]
-        Rectangle height and width.
-    mode : Literal['row', 'column']
-        Extraction mode - either row-wise or column-wise.
+    rect_dims : tuple[int, int] | None
+        Rectangle height and width. If None, determine dimensions automatically.
+    mode : Literal["row", "column"]
+        Extraction ordering mode.
     min_frac : float
-        Fraction of True pixels required in rectangle, range [0, 1].
+        Minimum fraction of foreground pixels required inside each rectangle.
     visualize : bool
-        Plot the extracted masks if True.
+        Plot the extracted rectangles if True.
+    auto_size_mode : Literal["min", "minmin", "fit_all"]
+        Automatic sizing strategy:
+        - "min": independently minimize height and width across components.
+        - "minmin": use the smallest height and width across all specimens.
+        - "fit_all": use the maximum required height and width to fit all
+          component bounding boxes.
+    margin : int
+        Inward margin applied to each side of each component bounding box
+        when estimating automatic dimensions. Positive values shrink the
+        estimated dimensions by 2 * margin. Does not affect manual dimensions.
+    min_area : int
+        Minimum allowed connected-component area for reliable automatic sizing.
+        If any component is smaller, issue a warning and use fallback_dims.
+    fallback_dims : tuple[int, int]
+        Manually specified dimensions used if automatic sizing is unreliable.
 
     Returns
     -------
     tuple[list, list]
-        A tuple containing:
-        - sorted list of NDArray masks, shape (H, W)
-        - sorted list of mask coordinates, tuple[int, int].
+        (sorted rectangular masks, sorted (top, left) coordinates).
     """
+    if binary_mask.ndim != 2:
+        raise ValueError("binary_mask must be a 2D array.")
+    if mode not in ("row", "column"):
+        raise ValueError("mode must be 'row' or 'column'.")
+    if not 0 <= min_frac <= 1:
+        raise ValueError("min_frac must be between 0 and 1.")
+    if margin < 0:
+        raise ValueError("margin must be non-negative.")
+    if min_area < 1:
+        raise ValueError("min_area must be at least 1.")
+
     labeled = label(binary_mask)
     regions = regionprops(labeled)
-    rect_height, rect_width = rect_dims
-
-    masks_list = []
-    coords_list = []
     H, W = binary_mask.shape
 
-    for region in regions:
+    def validate_dims(dims, name):
+        if (
+            len(dims) != 2
+            or any(not isinstance(d, (int, np.integer)) or d <= 0 for d in dims)
+        ):
+            raise ValueError(f"{name} must contain two positive integers.")
+        if dims[0] > H or dims[1] > W:
+            raise ValueError(f"{name} must not exceed the image dimensions.")
+        return tuple(map(int, dims))
+
+    fallback_dims = validate_dims(fallback_dims, "fallback_dims")
+
+    # Determine rectangle dimensions.
+    if rect_dims is not None:
+        rect_height, rect_width = validate_dims(rect_dims, "rect_dims")
+        per_sample_dims = None
+    
+    elif not regions:
+        warnings.warn(
+            "No connected components found; using fallback_dims.",
+            UserWarning,
+            stacklevel=2,
+        )
+        rect_height, rect_width = fallback_dims
+        per_sample_dims = None
+    
+    else:
+        too_small = [region for region in regions if region.area < min_area]
+    
+        if too_small:
+            warnings.warn(
+                f"{len(too_small)} component(s) have area below "
+                f"min_area={min_area}. Using fallback_dims={fallback_dims}.",
+                UserWarning,
+                stacklevel=2,
+            )
+            rect_height, rect_width = fallback_dims
+            per_sample_dims = None
+    
+        else:
+            sizes = []
+    
+            for region in regions:
+                min_row, min_col, max_row, max_col = region.bbox
+                height = max_row - min_row - 2 * margin
+                width = max_col - min_col - 2 * margin
+    
+                if height <= 0 or width <= 0:
+                    warnings.warn(
+                        "Margin leaves a non-positive bounding-box dimension. "
+                        f"Using fallback_dims={fallback_dims}.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    sizes = None
+                    rect_height, rect_width = fallback_dims
+                    per_sample_dims = None
+                    break
+    
+                sizes.append((height, width))
+    
+            if sizes is not None:
+                sizes = np.asarray(sizes, dtype=int)
+            
+                if auto_size_mode == "minmin":
+                    rect_height = int(sizes[:, 0].min())
+                    rect_width = int(sizes[:, 1].min())
+                    per_sample_dims = None
+            
+                elif auto_size_mode == "min":
+                    per_sample_dims = sizes
+                    rect_height = rect_width = None
+            
+                elif auto_size_mode == "fit_all":
+                    rect_height = int(sizes[:, 0].max())
+                    rect_width = int(sizes[:, 1].max())
+                    per_sample_dims = None
+            
+                else:
+                    raise ValueError(
+                        "auto_size_mode must be 'min', 'minmin', or 'fit_all'."
+                    )
+
+    if per_sample_dims is None:
+        if rect_height > H or rect_width > W:
+            raise ValueError(
+                f"Rectangle dimensions {(rect_height, rect_width)} exceed "
+                f"image dimensions {(H, W)}."
+            )
+    else:
+        if np.any(per_sample_dims[:, 0] > H) or np.any(per_sample_dims[:, 1] > W):
+            raise ValueError("Some automatically detected dimensions exceed the image.")
+
+    # Extract rectangles.
+    masks_list = []
+    coords_list = []
+    dims_list = []
+    
+    for i, region in enumerate(regions):
+        if per_sample_dims is not None:
+            rect_height, rect_width = map(int, per_sample_dims[i])
+    
         cy, cx = region.centroid
         cy, cx = int(round(cy)), int(round(cx))
-
-        top = max(0, cy - rect_height // 2)
-        left = max(0, cx - rect_width // 2)
-        bottom = min(H, top + rect_height)
-        right = min(W, left + rect_width)
-
-        if bottom - top < rect_height:
-            top = max(0, bottom - rect_height)
-        if right - left < rect_width:
-            left = max(0, right - rect_width)
-
+    
+        top = int(np.clip(cy - rect_height // 2, 0, H - rect_height))
+        left = int(np.clip(cx - rect_width // 2, 0, W - rect_width))
+        bottom = top + rect_height
+        right = left + rect_width
+    
         rect_region = binary_mask[top:bottom, left:right]
-        rect_area = (bottom - top) * (right - left)
-        frac_true = np.sum(rect_region) / rect_area
+        frac_true = np.count_nonzero(rect_region) / (rect_height * rect_width)
+    
         if frac_true < min_frac:
             continue
-
+    
         rect_mask = np.zeros_like(binary_mask, dtype=bool)
         rect_mask[top:bottom, left:right] = True
-
+    
         masks_list.append(rect_mask)
         coords_list.append((top, left))
+        dims_list.append((rect_height, rect_width))
 
-    # Grouping
+    # Group and sort rectangles.
     if coords_list:
-        coords_array = np.array(coords_list)
-        if mode == 'row':
-            group_coords = coords_array[:, 0] # top
-            sort_key = 1 # sort each row by left
-        elif mode == 'column':
-            group_coords = coords_array[:, 1] # left
-            sort_key = 0 # sort each column by top
+        coords_array = np.asarray(coords_list)
+    
+        if mode == "row":
+            group_axis = 0
+            sort_key = 1
         else:
-            raise ValueError("mode must be 'row' or 'column'")
-
-        sorted_indices = np.argsort(group_coords)
-        coords_array = coords_array[sorted_indices]
-        masks_list = [masks_list[i] for i in sorted_indices]
-
+            group_axis = 1
+            sort_key = 0
+    
+        # Use a consistent reference threshold for grouping.
+        if per_sample_dims is not None:
+            threshold_dims = np.median(per_sample_dims, axis=0).astype(int)
+            threshold = max(1, int(threshold_dims[group_axis] // 4))
+        else:
+            threshold = max(
+                1,
+                (rect_height if mode == "row" else rect_width) // 4,
+            )
+    
+        sorted_indices = np.argsort(coords_array[:, group_axis])
+    
+        items = [
+            (coords_list[i], masks_list[i], dims_list[i])
+            for i in sorted_indices
+        ]
+    
         groups = []
         current_group = []
-        last_coord = coords_array[0, 0] if mode == 'row' else coords_array[0, 1]
-        threshold = rect_height // 4 if mode == 'row' else rect_width // 4
-
-        for coord, mask in zip(coords_array, masks_list):
-            current_coord = coord[0] if mode == 'row' else coord[1]
-            if abs(current_coord - last_coord) > threshold:
+        last_coord = items[0][0][group_axis]
+    
+        for item in items:
+            current_coord = item[0][group_axis]
+    
+            if abs(current_coord - last_coord) > threshold and current_group:
                 groups.append(current_group)
-                current_group = [(coord, mask)]
-                last_coord = current_coord
-            else:
-                current_group.append((coord, mask))
-        groups.append(current_group)
-
-        # Sort each group
+                current_group = []
+    
+            current_group.append(item)
+            last_coord = current_coord
+    
+        if current_group:
+            groups.append(current_group)
+    
         sorted_items = []
         for group in groups:
-            group_sorted = sorted(group, key=lambda x: x[0][sort_key])
-            sorted_items.extend(group_sorted)
-
-        coords_list_sorted, masks_list_sorted = zip(*sorted_items) if sorted_items else ([], [])
+            sorted_items.extend(
+                sorted(group, key=lambda item: item[0][sort_key])
+            )
+    
+        coords_list_sorted = [item[0] for item in sorted_items]
+        masks_list_sorted = [item[1] for item in sorted_items]
+        dims_list_sorted = [item[2] for item in sorted_items]
+    
     else:
-        coords_list_sorted, masks_list_sorted = [], []
+        coords_list_sorted, masks_list_sorted, dims_list_sorted = [], [], []
 
-    # Visualization
+    # Visualization.
     if visualize:
         fig, ax = plt.subplots(figsize=(10, 10))
-        ax.imshow(binary_mask, cmap='gray')
-        ax.set_title('Combined mask')
+        ax.imshow(binary_mask, cmap="gray")
+        ax.set_title(f"Extracted rectangles ({len(coords_list_sorted)} samples)")
 
-        for i, (top, left) in enumerate(coords_list_sorted):
-            rect = patches.Rectangle((left, top), rect_width, rect_height,
-                                     linewidth=2, edgecolor='red', facecolor='none')
+        for i, ((top, left), (rect_height, rect_width)) in enumerate(
+            zip(coords_list_sorted, dims_list_sorted)
+        ):
+            rect = patches.Rectangle(
+                (left, top),
+                rect_width,
+                rect_height,
+                linewidth=2,
+                edgecolor="red",
+                facecolor="none",
+            )
             ax.add_patch(rect)
+            ax.text(
+                left + rect_width / 2,
+                top + rect_height / 2,
+                str(i + 1),
+                color="red",
+                fontsize=12,
+                ha="center",
+                va="center",
+                fontweight="bold",
+            )
 
-            cx = left + rect_width / 2
-            cy = top + rect_height / 2
-            ax.text(cx, cy, str(i+1), color='red', fontsize=12,
-                    ha='center', va='center', fontweight='bold')
-        
-        plt.axis('off')
+        ax.axis("off")
         plt.show()
 
-    return list(masks_list_sorted), list(coords_list_sorted)
+    return masks_list_sorted, coords_list_sorted
