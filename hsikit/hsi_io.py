@@ -10,6 +10,13 @@ import numpy as np
 from numpy.typing import NDArray
 import tifffile
 
+from collections.abc import Iterator
+from typing import Any, Literal
+
+from hsikit.binary_masks import rect_extraction, mask_top_contrast
+import csv
+from PIL import Image
+
 import os
 from pathlib import Path
 
@@ -266,6 +273,300 @@ def load_hsi_batch(
 
     return result
 
+# Load and process HSI cubes sequentially (one by one) to reduce RAM workload
+# For larger datasets
+def _iter_hsi_cubes(
+    root_folder: str | Path,
+    suffix: str = "_refl",
+    return_metadata: bool = False,
+    verbose: bool = True
+) -> Iterator[tuple[str, NDArray, dict[str, Any] | None]]:
+    """Yield one HSI cube at a time as (name, cube, metadata)"""
+
+    basepaths = find_hsi_basepaths(root_folder, suffix=suffix)
+
+    for base in basepaths:
+        name = Path(base).stem
+
+        if return_metadata:
+            cube, metadata = load_hsi_raw(base, return_metadata=True)
+        else:
+            cube = load_hsi_raw(base, return_metadata=False)
+            metadata = None
+    
+        if verbose:
+            print(f"Loaded {name}: {cube.shape}, {cube.dtype}")
+    
+        yield name, cube, metadata
+    
+        # Release generator references before loading the next cube
+        del cube, metadata
+
+def _assign_grid_locations(
+    coords: list[tuple[int, int]],
+    rect_dims: tuple[int, int] | list[tuple[int, int]],
+    tolerance: int = 5,
+) -> list[tuple[int, int]]:
+    """Assign 1-based grid locations from ROI coordinates and dimensions."""
+
+    if not coords:
+        return []
+
+    coords_array = np.asarray(coords, dtype=float)
+
+    dims_array = np.asarray(rect_dims, dtype=float)
+
+    # Allow either a single shared size or individual sizes.
+    if dims_array.shape == (2,):
+        dims_array = np.tile(dims_array, (len(coords), 1))
+
+    if dims_array.shape != (len(coords), 2):
+        raise ValueError(
+            "rect_dims must be a (height, width) tuple or "
+            "one (height, width) tuple per coordinate."
+        )
+
+    # Calculate individual ROI centres.
+    row_centres = coords_array[:, 0] + dims_array[:, 0] / 2
+    col_centres = coords_array[:, 1] + dims_array[:, 1] / 2
+
+    def cluster_positions(values):
+        order = np.argsort(values)
+        labels = np.empty(len(values), dtype=int)
+
+        cluster = 0
+        cluster_values = [values[order[0]]]
+        labels[order[0]] = cluster
+
+        for idx in order[1:]:
+            centre = np.mean(cluster_values)
+
+            if abs(values[idx] - centre) > tolerance:
+                cluster += 1
+                cluster_values = [values[idx]]
+            else:
+                cluster_values.append(values[idx])
+
+            labels[idx] = cluster
+
+        return labels
+
+    row_ids = cluster_positions(row_centres)
+    col_ids = cluster_positions(col_centres)
+
+    locations = [
+        (int(row + 1), int(col + 1))
+        for row, col in zip(row_ids, col_ids)
+    ]
+
+    if len(set(locations)) != len(locations):
+        raise ValueError(
+            "Multiple ROIs mapped to the same grid location. "
+            "Check the tolerance or ROI coordinates."
+        )
+
+    return locations
+
+def _save_sample_cubes(
+    cube: NDArray,
+    binary_mask: NDArray,
+    output_folder: str | Path,
+    cube_name: str,
+    mode: Literal["row", "column"] = "column",
+    min_frac: float = 0.9,
+    rect_dims: tuple[int, int] | None = None,
+    auto_size_mode: Literal["min", "minmin", "fit_all"] = "min",
+    margin: int = 0,
+    min_area: int = 10,
+    fallback_dims: tuple[int, int] = (32, 32),
+) -> list[Path]:
+    """Extract and save individual specimen HSI cubes."""
+
+    output_folder = Path(output_folder)
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    binary_mask = np.asarray(binary_mask, dtype=bool)
+
+    if cube.ndim != 3:
+        raise ValueError(f"Expected a 3D cube, got {cube.shape}")
+
+    if binary_mask.shape != cube.shape[:2]:
+        raise ValueError(
+            f"Mask shape {binary_mask.shape} does not match "
+            f"cube spatial dimensions {cube.shape[:2]}"
+        )
+
+    _, coords, dims = rect_extraction(
+        binary_mask=binary_mask,
+        rect_dims=rect_dims,
+        mode=mode,
+        min_frac=min_frac,
+        visualize=False,
+        return_masks=False,
+        auto_size_mode=auto_size_mode,
+        margin=margin,
+        min_area=min_area,
+        fallback_dims=fallback_dims,
+    )
+
+    grid_locations = _assign_grid_locations(
+        coords=coords,
+        rect_dims=dims,
+        tolerance=5,
+    )
+
+    saved_paths = []
+
+    for (top, left), (height, width), (row, col) in zip(
+        coords, dims, grid_locations
+    ):
+        sample_cube = cube[
+            top:top + height,
+            left:left + width,
+            :
+        ]
+
+        sample_mask = binary_mask[
+            top:top + height,
+            left:left + width
+        ]
+
+        if sample_cube.shape[:2] != (height, width):
+            continue
+
+        # Remove background pixels from the extracted cube.
+        sample_cube = sample_cube.copy()
+        sample_cube[~sample_mask] = 0
+
+        sample_id = f"{cube_name}_sample_r{row:02d}_c{col:02d}"
+        output_path = output_folder / f"{sample_id}.npz"
+
+        np.savez_compressed(
+            output_path,
+            cube=sample_cube,
+            origin=np.asarray([top, left], dtype=np.int32),
+            sample_id=np.asarray(sample_id),
+            source_cube=np.asarray(cube_name),
+        )
+
+        saved_paths.append(output_path)
+
+    return saved_paths
+
+def process_hsi_folder_to_samples(
+    root_folder: str | Path,
+    output_folder: str | Path,
+    suffix: str = "_refl",
+    mode: Literal["row", "column"] = "column",
+    min_frac: float = 0.9,
+    rect_dims: tuple[int, int] | None = None,
+    auto_size_mode: Literal["min", "minmin", "fit_all"] = "min",
+    margin: int = 0,
+    min_area: int = 10,
+    fallback_dims: tuple[int, int] = (32, 32),
+    verbose: bool = True,
+) -> list[dict]:
+    """Process HSI acquisitions sequentially and save specimen cubes
+    plus one full-scene foreground mask per acquisition.
+    """
+
+    output_folder = Path(output_folder)
+    sample_folder = output_folder / "sample_cubes"
+    sample_folder.mkdir(parents=True, exist_ok=True)
+
+    log_path = output_folder / "processing_log.csv"
+    results = []
+
+    write_header = (
+        not log_path.exists() or log_path.stat().st_size == 0
+    )
+
+    with log_path.open("a", newline="", encoding="utf-8") as log_file:
+        writer = csv.DictWriter(
+            log_file,
+            fieldnames=[
+                "source_cube",
+                "status",
+                "n_samples",
+                "error",
+            ],
+        )
+
+        if write_header:
+            writer.writeheader()
+
+        for name, cube, _ in _iter_hsi_cubes(
+            root_folder,
+            suffix=suffix,
+            return_metadata=False,
+            verbose=verbose,
+        ):
+            try:
+                # 1. Generate the full-scene foreground mask.
+                foreground_mask = mask_top_contrast(
+                    cube,
+                    visualize=False,
+                    manual_max_band=20,
+                )
+
+                # 2. Save the individual specimen cubes.
+                paths = _save_sample_cubes(
+                    cube=cube,
+                    binary_mask=foreground_mask,
+                    output_folder=sample_folder,
+                    cube_name=name,
+                    mode=mode,
+                    min_frac=min_frac,
+                    rect_dims=rect_dims,
+                    auto_size_mode=auto_size_mode,
+                    margin=margin,
+                    min_area=min_area,
+                    fallback_dims=fallback_dims,
+                )
+
+                # 3. Save one mask for the entire scene.
+                mask_image = Image.fromarray(foreground_mask.astype(np.uint8) * 255)
+                mask_image.save(output_folder / f"{name}_mask.png")
+
+                result = {
+                    "source_cube": name,
+                    "status": "success",
+                    "n_samples": len(paths),
+                    "error": "",
+                }
+
+                if verbose:
+                    print(
+                        f"{name}: saved {len(paths)} specimen cubes "
+                        "and full-scene mask"
+                    )
+
+            except Exception as exc:
+                result = {
+                    "source_cube": name,
+                    "status": "error",
+                    "n_samples": 0,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+
+                if verbose:
+                    print(f"ERROR processing {name}: {result['error']}")
+
+            finally:
+                # Release large arrays before loading the next acquisition.
+                if "foreground_mask" in locals():
+                    del foreground_mask
+
+                del cube
+
+            writer.writerow(result)
+            log_file.flush()
+            results.append(result)
+
+    return results
+
+
+# Export hyperspectral cube as a TIFF stack of images (can be opened with ImageJ/FIJI)
 def export_tiff_stack(cube: NDArray, filename: str, verbose: bool = True) -> None:
     """
     Exports hyperspectral cube as a TIFF stack of images.
