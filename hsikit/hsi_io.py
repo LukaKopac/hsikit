@@ -19,6 +19,7 @@ from PIL import Image
 
 import os
 from pathlib import Path
+import gc
 
 def find_hsi_basepaths(root_folder: str, suffix: str = "_refl") -> list[str]:
     """
@@ -564,6 +565,81 @@ def process_hsi_folder_to_samples(
             results.append(result)
 
     return results
+
+# Lazy load individual sample cubes, calculate median/mean spectrum per sample and return X (n_samples, n_bands), y (n_samples,) arrays
+def load_sample_spectra(
+    folder: str | Path,
+    statistic: Literal['median', 'mean'] = 'median',
+    label_key: str = 'sample_id',
+    pattern: str ='*.npz',
+    verbose: bool = True
+) -> tuple[NDArray, NDArray]:
+    """
+    Lazily load individual sample cubes and calculate one spectrum per sample.
+
+    Parameters
+    ----------
+    folder : str or Path
+        Folder containing individual sample .npz files
+    statistic : {'mean', 'median'}
+        Statistic calculated over the spatial dimensions of each cube.
+    label_key : str
+        Key used to obtain the sample label from each .npz file.
+    pattern : str
+        Glob pattern for selecting sample files.
+    verbose : bool
+        Print processing progress.
+
+    Returns
+    -------
+    X : np.ndarray, shape (n_samples, n_bands)
+        Mean or median spectrum for each sample.
+    y : np.ndarray, shape (n_samples,)
+        Sample labels.
+    """
+    folder = Path(folder)
+
+    if statistic not in {'mean', 'median'}:
+        raise ValueError("statistic must be 'mean' or 'median'")
+
+    files = sorted(folder.glob(pattern))
+
+    if not files:
+        raise FileNotFoundError(f"No files matching {pattern!r} in {folder}")
+
+    spectra = []
+    labels = []
+
+    for i, file in enumerate(files, start=1):
+        with np.load(file, allow_pickle=False) as data:
+            cube = data['cube']
+
+            if statistic == 'median':
+                spectrum = np.median(cube, axis=(0,1))
+            else:
+                spectrum = np.mean(cube, axis=(0,1))
+
+            label = data[label_key].item()
+
+            # Keep only the spectrum and label, not the cube
+            spectra.append(spectrum)
+            labels.append(label)
+
+        del cube, spectrum
+
+        if verbose:
+            print(f"\rProcessed {i}/{len(files)} samples", end="")
+
+    if verbose:
+        print()
+
+    X = np.stack(spectra)
+    y = np.asarray(labels)
+
+    del spectra, labels
+    gc.collect()
+
+    return X, y
 
 
 # Export hyperspectral cube as a TIFF stack of images (can be opened with ImageJ/FIJI)
