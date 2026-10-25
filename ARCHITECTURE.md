@@ -5,6 +5,17 @@ Internal document to keep track of package structure and individual functionalit
 
 ---
 
+1. Base utilities (base_utils.py)
+2. Segmentation (binary_masks.py, extractors.py, masking_utility.py, temp_bg_classes.py)
+3. Cleaning (cleaning.py)
+4. Feature selection / engineering (feature_selection.py)
+5. IO (hsi_io.py)
+6. Preprocessing (preprocessing.py)
+7. Visualization (visualizations.py)
+8. Sandbox (sandbox.py)
+
+---
+
 ### [Base utilities (base_utils.py)](#base_utilspy)
 
 **Purpose:** General utility and helper functions.
@@ -100,7 +111,7 @@ Internal document to keep track of package structure and individual functionalit
 
 **Purpose:** Import and export hyperspectral datasets and metadata.
 
-**Input → Output:** `raw files → HSI cube / wavelengths / mappings`
+**Input → Output:** `file paths → HSI cube / wavelengths / mappings`
 
 **Functions**
 
@@ -378,13 +389,33 @@ Internal document to keep track of package structure and individual functionalit
 [⬅ Back to Overview](#overview)
 
 ### ROIExtractor
-
+- **Type:** class
+- **IO:** cube -> spectra (ROIs)
+- **Status:** ✅ Keep
+- **Purpose:** Extract mean or median spectra based on interactively manually defined ROIs (rectangular, polygon) from HSI cubes.
+- **Key methods:**
+    - show()
+    - get_results()
+- **Dependencies:** Requires *%matplotlib widget*
+- **Notes:**
 
 ### extract_local_mean()
-
+- **Type:** function
+- **IO:** cube, coords -> spectra
+- **Parameters:** cube, coords
+- **Optional parameters:** size, shape
+- **Status:** ✅ Keep
+- **Purpose:** Extracts mean spectra per ROI (square, disk) at manually specified locations
+- **Notes:**
 
 ### Grid_ROI_extractor()
-
+- **Type:** function
+- **IO:** cube, grid params -> spectra (ROIs)
+- **Parameters:** cube, start, roi_size, gap, n_rois
+- **Optional parameters:** statistic, order, band_for_display, ax, visualize
+- **Status:** ✅ Keep
+- **Purpose:** Extracts median/mean spectra per rectangle grid-based ROIs either row or column-wise
+- **Notes:**
 
 ---
 
