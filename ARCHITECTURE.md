@@ -120,6 +120,11 @@ Internal document to keep track of package structure and individual functionalit
 * [load_wavelengths()](#load_wavelengths)
 * [load_sample_mapping()](#load_sample_mapping)
 * [load_hsi_batch()](#load_hsi_batch)
+* [_iter_hsi_cubes()](#_iter_hsi_cubes)
+* [_assign_grid_locations()](#_assign_grid_locations)
+* [_save_sample_cubes()](#_save_sample_cubes)
+* [process_hsi_folder_to_samples()](#process_hsi_folder_to_samples)
+* [load_sample_spectra()](#load_sample_spectra)
 * [export_tiff_stack()](#export_tiff_stack)
 
 ---
@@ -451,22 +456,121 @@ Internal document to keep track of package structure and individual functionalit
 [⬅ Back to Overview](#overview)
 
 ### find_hsi_basepaths()
-
+- **Type:** function
+- **IO:** root folder -> file basepaths
+- **Parameters:** root_folder
+- **Optional parameters:** suffix
+- **Status:** ✅ Keep
+- **Purpose:** Finds HSI basepaths in a parent/root folder
+- **Dependencies:** Required by load_hsi_batch(), _iter_hsi_cubes
+- **Notes:**
 
 ### load_hsi_raw()
-
+- **Type:** function
+- **IO:** basepath -> cube
+- **Parameters:** base_path
+- **Optional parameters:** return_metadata, scale_to_reflectance
+- **Status:** ✅ Keep
+- **Purpose:** Loads a HSI data cube from a .raw and .hdr pair. Parses the ENVI header for metadata info, scales the data by 10000.0 to convert to reflectance and reshapes it according to interleave type. Optionally returns header metadata.
+- **Dependencies:** Required by load_hsi_batch(), _iter_hsi_cubes
+- **Notes:** Vital finction. Reflectance scale factor should not be hard-coded (default 10000). Questionable ENVI header parsing, accept other ENVI data types.
 
 ### load_wavelengths()
-
+- **Type:** function
+- **IO:** basepath -> wavelengths array
+- **Parameters:** hdr_file_path
+- **Status:** ✅ Keep
+- **Purpose:** Finds wavelengths in ENVI header file (.hdr), sanitizes the input and returns a wavelengths array
+- **Notes:** Could add additional input checking
 
 ### load_sample_mapping()
-
+- **Type:** function
+- **IO:** basepath -> mapping dict
+- **Parameters:** txt_path
+- **Status:** ✅ Keep
+- **Purpose:** Reads species mapping from a text file and returns it as a dictionary {scene_name: [sp1, sp2...], ...}
+Expected format
+```
+scene01: sp1, sp2, sp3...
+scene02: sp4, sp5, sp6...
+...
+```
+- **Notes:** Add additional mapping formats, translation (ID to actual) line parsing
 
 ### load_hsi_batch()
+- **Type:** function
+- **IO:** root folder -> dict of cubes
+- **Parameters:** root_folder
+- **Optional parameters:** suffix, return_metadata, return_wavelengths, return_names
+- **Status:** ✅ Keep
+- **Purpose:** Loads multiple cubes from basepaths and returns them in a dictionary, optionally with header metadata, wavelengths (single array), filenames. Dictionary keys: "cubes", "metadata", "wavelengths", "names"
+- **Dependencies:** Requires find_hsi_basepaths(), load_hsi_raw()
+- **Notes:** Vital for smaller to medium size datasets. Assess viability of different dict format - filenames as keys
 
+---
+### Lazy processing
+
+### _iter_hsi_cubes()
+- **Type:** function
+- **IO:** root folder -> iterator
+- **Parameters:** root_folder
+- **Optional parameters:** suffix, return_metadata
+- **Status:** ✅ Keep
+- **Purpose:** 
+- **Dependencies:** Depends on find_hsi_basepaths(), load_hsi_raw()
+- **Notes:**
+
+### _assign_grid_locations()
+- **Type:** function
+- **IO:** coords, rect dimensions -> row, col locations
+- **Parameters:** coords, rect_dims
+- **Optional parameters:** tolerance
+- **Status:** ✅ Keep
+- **Purpose:** 
+- **Dependencies:**
+- **Notes:**
+
+### _save_sample_cubes()
+- **Type:** function
+- **IO:** cube, mask -> list of output paths
+- **Parameters:** cube, binary_mask, output_folder, cube_name
+- **Optional parameters:** mode, min_frac, rect_dims, auto_size_mode, margin, min_area, fallback_dims
+- **Status:** ✅ Keep
+- **Purpose:** 
+- **Dependencies:** Depends on rect_extraction(), _assign_grid_locations()
+- **Notes:**
+
+### process_hsi_folder_to_samples()
+- **Type:** function
+- **IO:** root folder, output path -> individual cubes saved to disk, process log
+- **Parameters:** root_folder, output_folder
+- **Optional parameters:** suffix, mode, min_frac, rect_dims, auto_size_mode, margin, min_area, fallback_dims
+- **Status:** ✅ Keep
+- **Purpose:** 
+- **Dependencies:** Depends on _iter_hsi_cubes(), mask_top_contrast(), _save_sample_cubes()
+- **Notes:**
+
+### load_sample_spectra
+- **Type:** function
+- **IO:** folder -> X, y arrays
+- **Parameters:** folder
+- **Optional parameters:** statistic, label_key, pattern
+- **Status:** ✅ Keep
+- **Purpose:** 
+- **Dependencies:**
+- **Notes:**
+
+---
+### Output
 
 ### export_tiff_stack()
-
+- **Type:** function
+- **IO:** cube -> cube saved to disk as TIFF stack
+- **Parameters:** cube, filename
+- **Status:** ✅ Keep
+- **Purpose:** 
+- **Dependencies:**
+- **Notes:**
 
 ---
 
