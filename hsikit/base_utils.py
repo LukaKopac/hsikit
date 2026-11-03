@@ -96,24 +96,26 @@ def dict2Xy(sample_dictionary: dict[str, list[np.ndarray] | np.ndarray]) -> tupl
 def snr_per_band(cube: np.ndarray, mask: None | np.ndarray = None) -> np.ndarray:
     """
     Compute SNR (signal-to-noise ratio) per band after optionally masking bad pixels.
+    
     SNR = mean / std
     
     Parameters
     ----------
     cube : np.ndarray
-        shape (H, W, B)
+        HSI cube, shape (H, W, B)
     mask : np.ndarray
-        Boolean array (H, W), True = good pixel
+        Boolean array (H, W), True = good pixel.
+        If None, all pixels are included.
     
     Returns
     -------
     np.ndarray
-        Signal to noise ratio per band, length B
+        Signal-to-noise ratio per band, length B
     """
     if mask is None:
-        mask = np.ones_like(cube.shape[:2], dtype=bool)
-    
-    masked_cube = cube[mask] # shape (n_pixels, B)
+        masked_cube = cube.reshape(-1, cube.shape[-1])
+    else:
+        masked_cube = cube[mask]
 
     mean = masked_cube.mean(axis=0)
     std = masked_cube.std(axis=0)
