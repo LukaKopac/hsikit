@@ -6,6 +6,7 @@ Handles reading raw files, parsing metadata, and saving processed data.
 Note: This module is under active development and may change.
 """
 
+import pandas as pd
 import numpy as np
 from numpy.typing import NDArray
 import tifffile
@@ -18,6 +19,7 @@ import csv
 from PIL import Image
 
 import os
+import warnings
 from pathlib import Path
 import gc
 
@@ -276,6 +278,83 @@ def load_hsi_batch(
 
 # Load and process HSI cubes sequentially (one by one) to reduce RAM workload
 # For larger datasets
+
+def _validate_sample_mapping(
+    sample_mapping: pd.DataFrame | None,
+) -> None:
+    """
+    Validate sample mapping before processing.
+    
+    Required columns:
+    - scene_label
+    - row
+    - column
+    - sample_id
+
+    """
+
+    if sample_mapping is None:
+        return
+
+    required_columns = {
+        "scene_label",
+        "row",
+        "column",
+        "sample_id",
+    }
+
+    missing_columns = required_columns - set(sample_mapping.columns)
+
+    if missing_columns:
+        raise ValueError(
+            f"Sample mapping is missing required columns: "
+            f"{sorted(missing_columns)}"
+        )
+
+    # Check for duplicate sample IDs.
+    if sample_mapping["sample_id"].duplicated().any():
+        duplicates = sample_mapping.loc[
+            sample_mapping["sample_id"].duplicated(keep=False),
+            "sample_id",
+        ].tolist()
+
+        raise ValueError(
+            f"Duplicate sample IDs in mapping: {duplicates}"
+        )
+
+    # Check for duplicate scene/grid combinations.
+    location_columns = ["scene_label", "row", "column"]
+
+    if sample_mapping.duplicated(subset=location_columns).any():
+        duplicates = sample_mapping.loc[
+            sample_mapping.duplicated(
+                subset=location_columns,
+                keep=False,
+            ),
+            location_columns,
+        ]
+
+        raise ValueError(
+            "Duplicate scene/grid locations in mapping:\n"
+            f"{duplicates.to_string(index=False)}"
+        )
+
+def _build_sample_lookup(
+    sample_mapping: pd.DataFrame | None,
+) -> dict[tuple[str, int, int], str]:
+    """Build a lookup from scene/grid location to sample ID."""
+
+    if sample_mapping is None:
+        return {}
+
+    _validate_sample_mapping(sample_mapping)
+
+    return {
+        (str(row.scene_label), int(row.row), int(row.column)):
+        str(row.sample_id)
+        for row in sample_mapping.itertuples(index=False)
+    }
+
 def _iter_hsi_cubes(
     root_folder: str | Path,
     suffix: str = "_refl",
@@ -373,6 +452,7 @@ def _save_sample_cubes(
     binary_mask: NDArray,
     output_folder: str | Path,
     cube_name: str,
+    sample_lookup: dict[tuple[str, int, int], str] | None = None,
     mode: Literal["row", "column"] = "column",
     min_frac: float = 0.9,
     rect_dims: tuple[int, int] | None = None,
@@ -381,7 +461,9 @@ def _save_sample_cubes(
     min_area: int = 10,
     fallback_dims: tuple[int, int] = (32, 32),
 ) -> list[Path]:
-    """Extract and save individual specimen HSI cubes."""
+    """
+    Extract and save individual specimen HSI cubes.
+    """
 
     output_folder = Path(output_folder)
     output_folder.mkdir(parents=True, exist_ok=True)
@@ -439,8 +521,37 @@ def _save_sample_cubes(
         sample_cube = sample_cube.copy()
         sample_cube[~sample_mask] = 0
 
-        sample_id = f"{cube_name}_sample_r{row:02d}_c{col:02d}"
+        # Resolve sample ID from mapping, if available.
+        mapped_id = None
+
+        if sample_lookup is not None:
+            mapped_id = sample_lookup.get(
+                (cube_name, row, col)
+            )
+
+            if mapped_id is None:
+                warnings.warn(
+                    f"No sample mapping found for "
+                    f"{cube_name}, row {row}, column {col}. "
+                    f"Using automatic grid-based naming.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Fall back to automatic naming if no mapping is available.
+        sample_id = (
+            mapped_id
+            if mapped_id is not None
+            else f"{cube_name}_sample_r{row:02d}_c{col:02d}"
+        )
+
         output_path = output_folder / f"{sample_id}.npz"
+
+        # Prevent accidental overwriting.
+        if output_path.exists():
+            raise FileExistsError(
+                f"Output file already exists: {output_path}"
+            )
 
         np.savez_compressed(
             output_path,
@@ -448,6 +559,7 @@ def _save_sample_cubes(
             origin=np.asarray([top, left], dtype=np.int32),
             sample_id=np.asarray(sample_id),
             source_cube=np.asarray(cube_name),
+            grid_location=np.asarray([row, col], dtype=np.int32),
         )
 
         saved_paths.append(output_path)
@@ -458,6 +570,7 @@ def process_hsi_folder_to_samples(
     root_folder: str | Path,
     output_folder: str | Path,
     suffix: str = "_refl",
+    sample_mapping: pd.DataFrame | None = None,
     mode: Literal["row", "column"] = "column",
     min_frac: float = 0.9,
     rect_dims: tuple[int, int] | None = None,
@@ -474,6 +587,8 @@ def process_hsi_folder_to_samples(
     output_folder = Path(output_folder)
     sample_folder = output_folder / "sample_cubes"
     sample_folder.mkdir(parents=True, exist_ok=True)
+
+    sample_lookup = _build_sample_lookup(sample_mapping)
 
     log_path = output_folder / "processing_log.csv"
     results = []
@@ -516,6 +631,7 @@ def process_hsi_folder_to_samples(
                     binary_mask=foreground_mask,
                     output_folder=sample_folder,
                     cube_name=name,
+                    sample_lookup=sample_lookup if sample_lookup is not None else None,
                     mode=mode,
                     min_frac=min_frac,
                     rect_dims=rect_dims,
