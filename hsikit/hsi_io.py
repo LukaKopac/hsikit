@@ -304,12 +304,26 @@ def _validate_sample_mapping(
     }
 
     missing_columns = required_columns - set(sample_mapping.columns)
-
+    
     if missing_columns:
         raise ValueError(
             f"Sample mapping is missing required columns: "
             f"{sorted(missing_columns)}"
         )
+
+    if sample_mapping[list(required_columns)].isna().any().any():
+        raise ValueError(
+            "Sample mapping contains missing values in required columns."
+        )
+
+    for col in ["row", "column"]:
+        values = pd.to_numeric(sample_mapping[col], errors="coerce")
+
+        if values.isna().any() or not np.isfinite(values).all():
+            raise ValueError(f"Invalid values in '{col}'.")
+
+        if not np.equal(values, np.floor(values)).all():
+            raise ValueError(f"'{col}' must contain integers.")
 
     # Check for duplicate sample IDs.
     if sample_mapping["sample_id"].duplicated().any():
@@ -349,10 +363,20 @@ def _build_sample_lookup(
 
     _validate_sample_mapping(sample_mapping)
 
+    mapping = sample_mapping.copy()
+
+    mapping["row"] = pd.to_numeric(
+        mapping["row"]
+    ).astype(int)
+
+    mapping["column"] = pd.to_numeric(
+        mapping["column"]
+    ).astype(int)
+
     return {
-        (str(row.scene_label), int(row.row), int(row.column)):
+        (str(row.scene_label), row.row, row.column):
         str(row.sample_id)
-        for row in sample_mapping.itertuples(index=False)
+        for row in mapping.itertuples(index=False)
     }
 
 def _iter_hsi_cubes(
@@ -510,22 +534,15 @@ def _save_sample_cubes(
             :
         ]
 
-        sample_mask = binary_mask[
-            top:top + height,
-            left:left + width
-        ]
-
         if sample_cube.shape[:2] != (height, width):
-            continue
-
-        # Remove background pixels from the extracted cube.
-        sample_cube = sample_cube.copy()
-        sample_cube[~sample_mask] = 0
+            raise ValueError(
+                f"ROI at ({top}, {left}) has unexpected shape {sample_cube.shape[:2]}; expected {(height, width)}."
+            )
 
         # Resolve sample ID from mapping, if available.
         mapped_id = None
 
-        if sample_lookup is not None:
+        if sample_lookup:
 
             scene_label = cube_name.removesuffix(suffix) if suffix else cube_name
 
@@ -621,6 +638,10 @@ def process_hsi_folder_to_samples(
             return_metadata=False,
             verbose=verbose,
         ):
+            foreground_mask = None
+
+            paths = []
+            
             try:
                 # 1. Generate the full-scene foreground mask.
                 foreground_mask = mask_top_contrast(
@@ -636,7 +657,7 @@ def process_hsi_folder_to_samples(
                     output_folder=sample_folder,
                     cube_name=name,
                     suffix=suffix,
-                    sample_lookup=sample_lookup if sample_lookup is not None else None,
+                    sample_lookup=sample_lookup,
                     mode=mode,
                     min_frac=min_frac,
                     rect_dims=rect_dims,
@@ -648,7 +669,13 @@ def process_hsi_folder_to_samples(
 
                 # 3. Save one mask for the entire scene.
                 mask_image = Image.fromarray(foreground_mask.astype(np.uint8) * 255)
-                mask_image.save(output_folder / f"{name}_mask.png")
+                
+                mask_path = output_folder / f"{name}_mask.png"
+                if mask_path.exists():
+                    raise FileExistsError(
+                        f"Mask already exists: {mask_path}"
+                    )
+                mask_image.save(mask_path)
 
                 result = {
                     "source_cube": name,
@@ -667,7 +694,7 @@ def process_hsi_folder_to_samples(
                 result = {
                     "source_cube": name,
                     "status": "error",
-                    "n_samples": 0,
+                    "n_samples": len(paths),
                     "error": f"{type(exc).__name__}: {exc}",
                 }
 
@@ -676,9 +703,7 @@ def process_hsi_folder_to_samples(
 
             finally:
                 # Release large arrays before loading the next acquisition.
-                if "foreground_mask" in locals():
-                    del foreground_mask
-
+                del foreground_mask
                 del cube
 
             writer.writerow(result)
