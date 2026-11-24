@@ -529,6 +529,7 @@ def _save_sample_cubes(
     margin: int = 0,
     min_area: int = 10,
     fallback_dims: tuple[int, int] = (32, 32),
+    grid_loc_tolerance=10
 ) -> tuple[list[Path], list[dict]]:
     """
     Extract and save individual specimen HSI cubes.
@@ -564,7 +565,7 @@ def _save_sample_cubes(
     grid_locations = _assign_grid_locations(
         coords=coords,
         rect_dims=dims,
-        tolerance=5,
+        tolerance=grid_loc_tolerance,
     )
 
     saved_paths = []
@@ -653,6 +654,7 @@ def process_hsi_folder_to_samples(
     margin: int = 0,
     min_area: int = 10,
     fallback_dims: tuple[int, int] = (32, 32),
+    grid_loc_tolerance=10,
     verbose: bool = True,
 ) -> list[dict]:
     """Process HSI acquisitions sequentially and save specimen cubes
@@ -720,6 +722,7 @@ def process_hsi_folder_to_samples(
                     margin=margin,
                     min_area=min_area,
                     fallback_dims=fallback_dims,
+                    grid_loc_tolerance=grid_loc_tolerance
                 )
 
                 # 3. Save one mask for the entire scene.
