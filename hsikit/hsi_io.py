@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from hsikit.binary_masks import rect_extraction, mask_top_contrast
 import csv
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 import os
 import warnings
@@ -379,6 +379,50 @@ def _build_sample_lookup(
         for row in mapping.itertuples(index=False)
     }
 
+
+def _create_annotated_mask(
+    binary_mask: NDArray,
+    rectangles: list[dict],
+    line_width: int = 2,
+) -> Image.Image:
+    """Create an RGB mask with extraction rectangles and grid labels."""
+
+    image = Image.fromarray(
+        binary_mask.astype(np.uint8) * 255
+    ).convert("RGB")
+
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default()
+
+    for rect in rectangles:
+        top = rect["top"]
+        left = rect["left"]
+        bottom = rect["bottom"]
+        right = rect["right"]
+        row = rect["row"]
+        col = rect["column"]
+
+        # Draw the actual extraction rectangle.
+        draw.rectangle(
+            [left, top, right - 1, bottom - 1],
+            outline="red",
+            width=line_width,
+        )
+
+        # Label the rectangle with its assigned grid position.
+        label = f"R{row} C{col}"
+
+        draw.text(
+            (left + 3, top + 3),
+            label,
+            fill="red",
+            font=font,
+            stroke_width=1,
+            stroke_fill="white",
+        )
+
+    return image
+
 def _iter_hsi_cubes(
     root_folder: str | Path,
     suffix: str = "_refl",
@@ -485,7 +529,7 @@ def _save_sample_cubes(
     margin: int = 0,
     min_area: int = 10,
     fallback_dims: tuple[int, int] = (32, 32),
-) -> list[Path]:
+) -> tuple[list[Path], list[dict]]:
     """
     Extract and save individual specimen HSI cubes.
     """
@@ -524,6 +568,7 @@ def _save_sample_cubes(
     )
 
     saved_paths = []
+    rectangles = []
 
     for (top, left), (height, width), (row, col) in zip(
         coords, dims, grid_locations
@@ -566,6 +611,15 @@ def _save_sample_cubes(
             else f"{cube_name}_sample_r{row:02d}_c{col:02d}"
         )
 
+        rectangles.append({
+            "top": int(top),
+            "left": int(left),
+            "bottom": int(top + height),
+            "right": int(left + width),
+            "row": int(row),
+            "column": int(col)
+        })
+
         output_path = output_folder / f"{sample_id}.npz"
 
         # Prevent accidental overwriting.
@@ -585,7 +639,7 @@ def _save_sample_cubes(
 
         saved_paths.append(output_path)
 
-    return saved_paths
+    return saved_paths, rectangles
 
 def process_hsi_folder_to_samples(
     root_folder: str | Path,
@@ -641,6 +695,7 @@ def process_hsi_folder_to_samples(
             foreground_mask = None
 
             paths = []
+            rectangles = []
             
             try:
                 # 1. Generate the full-scene foreground mask.
@@ -651,7 +706,7 @@ def process_hsi_folder_to_samples(
                 )
 
                 # 2. Save the individual specimen cubes.
-                paths = _save_sample_cubes(
+                paths, rectangles = _save_sample_cubes(
                     cube=cube,
                     binary_mask=foreground_mask,
                     output_folder=sample_folder,
@@ -668,7 +723,10 @@ def process_hsi_folder_to_samples(
                 )
 
                 # 3. Save one mask for the entire scene.
-                mask_image = Image.fromarray(foreground_mask.astype(np.uint8) * 255)
+                mask_image = _create_annotated_mask(
+                    binary_mask=foreground_mask,
+                    rectangles=rectangles
+                )
                 
                 mask_path = output_folder / f"{name}_mask.png"
                 if mask_path.exists():
