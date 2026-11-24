@@ -452,6 +452,7 @@ def _save_sample_cubes(
     binary_mask: NDArray,
     output_folder: str | Path,
     cube_name: str,
+    suffix: str = "_refl",
     sample_lookup: dict[tuple[str, int, int], str] | None = None,
     mode: Literal["row", "column"] = "column",
     min_frac: float = 0.9,
@@ -525,8 +526,11 @@ def _save_sample_cubes(
         mapped_id = None
 
         if sample_lookup is not None:
+
+            scene_label = cube_name.removesuffix(suffix) if suffix else cube_name
+
             mapped_id = sample_lookup.get(
-                (cube_name, row, col)
+                (scene_label, row, col)
             )
 
             if mapped_id is None:
@@ -631,6 +635,7 @@ def process_hsi_folder_to_samples(
                     binary_mask=foreground_mask,
                     output_folder=sample_folder,
                     cube_name=name,
+                    suffix=suffix,
                     sample_lookup=sample_lookup if sample_lookup is not None else None,
                     mode=mode,
                     min_frac=min_frac,
