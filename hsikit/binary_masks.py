@@ -151,7 +151,10 @@ def mask_top_contrast(
         return img
 
     # Define spectral range
-    start_band, end_band = band_limit if band_limit is not None else (0, hs_crop.shape[2])
+    start_band, end_band = band_limit if band_limit is not None else (0, None)
+
+    if end_band is None:
+        end_band = hs_crop.shape[2]
 
     if not (0 <= start_band < end_band <= hs_crop.shape[2]):
         raise ValueError(
