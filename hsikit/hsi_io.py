@@ -529,6 +529,8 @@ def _save_sample_cubes(
     auto_size_mode: Literal["min", "minmin", "fit_all"] = "min",
     margin: int = 0,
     min_area: int = 10,
+    min_area_fraction: float = 0.25,
+    dim_ratio_range: tuple[float, float] = (0.5, 1.5),
     fallback_dims: tuple[int, int] = (32, 32),
     grid_loc_tolerance=10
 ) -> tuple[list[Path], list[dict]]:
@@ -560,6 +562,8 @@ def _save_sample_cubes(
         auto_size_mode=auto_size_mode,
         margin=margin,
         min_area=min_area,
+        min_area_fraction=min_area_fraction,
+        dim_ratio_range=dim_ratio_range,
         fallback_dims=fallback_dims,
     )
 
