@@ -98,7 +98,7 @@ def mask_top_contrast(
     crop: tuple[int, int] = (0, 0),
     min_size: int = 500,
     hole_size: int = 100,
-    manual_max_band: Optional[int] = None,
+    band_limit: Optional[tuple[int, int]] = None,
     visualize: bool = False,
     title: Optional[str] = None
 ) -> NDArray:
@@ -122,8 +122,9 @@ def mask_top_contrast(
         Minimum size of regions to retain in pixels (remove area if < min_size).
     hole_size : int
         Maximum hole size to fill for small holes removal (fill hole if < hole_size).
-    manual_max_band : Optional[int]
-        Optional index of maximum band to check for contrast.
+    band_limit : Optional[int]
+        Optional (start, end) band indices defining the spectral range used for contrast calculation and band selection.
+        The end index is exclusive. If None, all bands are used.
     visualize : bool
         Plot intermediate results if True.
     title : Optional[str]
@@ -149,17 +150,27 @@ def mask_top_contrast(
         img = np.clip((img - low) / (high - low), 0, 1)
         return img
 
-    if manual_max_band is not None:
-        num_bands = manual_max_band
-    else:
-        num_bands = hs_crop.shape[2]
-        
-    # Select bands with highest contrast
-    contrast_vals = np.zeros(num_bands)
-    for b in range(num_bands):
-        contrast_vals[b] = contrast(hs_crop[:, :, b])
-    
-    top_indices = contrast_vals.argsort()[-top_n:][::-1]
+    # Define spectral range
+    start_band, end_band = band_limit if band_limit is not None else (0, hs_crop.shape[2])
+
+    if not (0 <= start_band < end_band <= hs_crop.shape[2]):
+        raise ValueError(
+            f"Invalid band_limit {band_limit}. Expected 0 <= start < end <= {hs_crop.shape[2]}"
+        )
+
+    # Select bands with highest contrast within the specified range
+    contrast_vals = np.zeros(end_band - start_band)
+
+    for i, b in enumerate(range(start_band, end_band)):
+        contrast_vals[i] = contrast(hs_crop[:, :, b])
+
+    top_indices = np.argsort(contrast_vals)[-top_n:][::-1] + start_band
+
+    if top_n > len(contrast_vals):
+        raise ValueError(
+            f"top_n ({top_n}) cannot exceed the number of available bands "
+            f"({len(contrast_vals)})."
+        )
     
     # Compute masks
     masks = []
