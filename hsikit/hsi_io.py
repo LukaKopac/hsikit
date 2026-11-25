@@ -13,6 +13,7 @@ import tifffile
 
 from collections.abc import Iterator
 from typing import Any, Literal
+import inspect
 
 from hsikit.binary_masks import rect_extraction, mask_top_contrast
 import csv
@@ -647,14 +648,8 @@ def process_hsi_folder_to_samples(
     output_folder: str | Path,
     suffix: str = "_refl",
     sample_mapping: pd.DataFrame | None = None,
-    mode: Literal["row", "column"] = "column",
-    min_frac: float = 0.9,
-    rect_dims: tuple[int, int] | None = None,
-    auto_size_mode: Literal["min", "minmin", "fit_all"] = "min",
-    margin: int = 0,
-    min_area: int = 10,
-    fallback_dims: tuple[int, int] = (32, 32),
-    grid_loc_tolerance=10,
+    masking_params: dict[str, Any] | None = None,
+    extraction_params: dict[str, Any] | None = None,
     verbose: bool = True,
 ) -> list[dict]:
     """Process HSI acquisitions sequentially and save specimen cubes
@@ -666,6 +661,53 @@ def process_hsi_folder_to_samples(
     sample_folder.mkdir(parents=True, exist_ok=True)
 
     sample_lookup = _build_sample_lookup(sample_mapping)
+
+    # Default masking parameters
+    masking_config = {
+        "visualize": False
+    }
+
+    if masking_params is not None:
+        masking_config.update(masking_params)
+
+    # Default specimen extraction parameters
+    extraction_config = {
+        "mode": "column",
+        "min_frac": 0.9,
+        "rect_dims": None,
+        "auto_size_mode": "min",
+        "margin": 0,
+        "min_area": 10,
+        "fallback_dims": (32, 32),
+        "grid_loc_tolerance": 10
+    }
+
+    if extraction_params is not None:
+        extraction_config.update(extraction_params)
+
+    valid_masking_params = set(inspect.signature(mask_top_contrast).parameters)
+    valid_extraction_params = set(inspect.signature(_save_sample_cubes).parameters)
+
+    valid_extraction_params -= {
+        "cube",
+        "binary_mask",
+        "output_folder",
+        "cube_name",
+        "suffix",
+        "sample_lookup",
+    }
+
+    for name, params, valid in [
+        ("masking_params", masking_params, valid_masking_params),
+        ("extraction_params", extraction_params, valid_extraction_params),
+    ]:
+        if params is not None:
+            invalid = set(params) - valid
+
+            if invalid:
+                raise ValueError(
+                    f"Unknown parameters in {name}: {sorted(invalid)}"
+                )
 
     log_path = output_folder / "processing_log.csv"
     results = []
@@ -703,8 +745,7 @@ def process_hsi_folder_to_samples(
                 # 1. Generate the full-scene foreground mask.
                 foreground_mask = mask_top_contrast(
                     cube,
-                    visualize=False,
-                    manual_max_band=20,
+                    **masking_config
                 )
 
                 # 2. Save the individual specimen cubes.
@@ -715,14 +756,7 @@ def process_hsi_folder_to_samples(
                     cube_name=name,
                     suffix=suffix,
                     sample_lookup=sample_lookup,
-                    mode=mode,
-                    min_frac=min_frac,
-                    rect_dims=rect_dims,
-                    auto_size_mode=auto_size_mode,
-                    margin=margin,
-                    min_area=min_area,
-                    fallback_dims=fallback_dims,
-                    grid_loc_tolerance=grid_loc_tolerance
+                    **extraction_config
                 )
 
                 # 3. Save one mask for the entire scene.
